@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NK Helper — Admin Control Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Background Animated Mesh -->
+  <div class="bg-mesh"></div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- 1. LOGIN SCREEN -->
+  <div id="loginScreen" class="screen-container">
+    <div class="login-card">
+      <div class="logo-area">
+        <div class="logo-badge">NK</div>
+        <h1>NK Helper</h1>
+        <p class="subtitle">ศูนย์ควบคุมระบบระยะไกล (Remote Control Center)</p>
+      </div>
+
+      <form id="loginForm" class="login-form">
+        <div id="loginAlert" class="alert danger hidden"></div>
+
+        <div class="form-group">
+          <label for="username">ชื่อผู้ใช้ผู้ควบคุม (Master Username)</label>
+          <input type="text" id="username" placeholder="ค่าเริ่มต้น: admin" required autocomplete="username">
+        </div>
+
+        <div class="form-group">
+          <label for="password">รหัสผ่านผู้ควบคุม (Master Password)</label>
+          <input type="password" id="password" placeholder="ค่าเริ่มต้น: admin888" required autocomplete="current-password">
+        </div>
+
+        <button type="submit" id="btnLogin" class="btn btn-primary btn-block">
+          <span class="btn-text">เข้าสู่ระบบศูนย์ควบคุม</span>
+          <span class="btn-spinner hidden"></span>
+        </button>
+
+        <p class="login-hint">🔒 บัญชีควบคุมส่วนตัวของผู้สร้างเท่านั้น (ไม่ใช่บัญชีของ NK) คุณสามารถเปลี่ยนรหัสได้ตลอดเวลา</p>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. DASHBOARD SCREEN -->
+  <div id="dashboardScreen" class="screen-container hidden">
+    <!-- Navbar -->
+    <header class="navbar">
+      <div class="nav-brand">
+        <div class="logo-badge-sm">NK</div>
+        <div class="brand-text">
+          <span class="brand-title">NK Helper Control</span>
+          <span class="brand-version">Railway Cloud v1.0</span>
+        </div>
+      </div>
+
+      <div class="nav-center">
+        <div id="globalStatusBadge" class="status-pill online">
+          <span class="pulse-dot"></span>
+          <span class="status-label">ระบบเปิดใช้งานปกติ</span>
+        </div>
+      </div>
+
+      <div class="nav-user">
+        <div class="user-info">
+          <span id="navUserName" class="user-name">Admin</span>
+          <span id="navUserRole" class="user-role">ผู้ดูแลระบบ</span>
+        </div>
+        <button id="btnLogout" class="btn btn-outline-danger btn-sm">ออกจากระบบ</button>
+      </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="main-content">
+      <!-- Quick Stats Row -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon switch-icon">⚡</div>
+          <div class="stat-details">
+            <span class="stat-title">สถานะโปรแกรม</span>
+            <span id="statAppStatus" class="stat-value text-success">เปิดใช้งาน</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon clients-icon">💻</div>
+          <div class="stat-details">
+            <span class="stat-title">เครื่องที่กำลังออนไลน์</span>
+            <span id="statActiveClients" class="stat-value text-accent">0 เครื่อง</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon version-icon">🚀</div>
+          <div class="stat-details">
+            <span class="stat-title">เวอร์ชันล่าสุด</span>
+            <span id="statLatestVersion" class="stat-value">v3.5.2</span>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon time-icon">🕒</div>
+          <div class="stat-details">
+            <span class="stat-title">อัปเดตล่าสุด</span>
+            <span id="statLastUpdated" class="stat-value text-muted">-</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controls Grid -->
+      <div class="control-sections">
+
+        <!-- SECTION 1: MASTER KILL SWITCH -->
+        <section class="card section-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-icon">🛑</span>
+              <div>
+                <h2>สวิตช์เปิด-ปิดระบบ (Master Kill Switch)</h2>
+                <p class="card-desc">ควบคุมการอนุญาตให้โปรแกรม NK Helper ทุกเครื่องทำงาน หรือล็อกหน้าจอเพื่อปิดปรับปรุง</p>
+              </div>
+            </div>
+            <div class="toggle-wrapper">
+              <label class="switch">
+                <input type="checkbox" id="chkAppEnabled">
+                <span class="slider round"></span>
+              </label>
+              <span id="txtAppEnabledStatus" class="toggle-status-label">เปิดใช้งาน</span>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <div id="maintenancePreviewBox" class="maintenance-box">
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="maintenanceTitle">หัวข้อแจ้งเตือนเมื่อปิดปรับปรุง</label>
+                  <input type="text" id="maintenanceTitle" placeholder="ระบบปิดปรับปรุงชั่วคราว">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="maintenanceContact">ช่องทางติดต่อ</label>
+                  <input type="text" id="maintenanceContact" placeholder="ติดต่อผู้ดูแลระบบ">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="maintenanceMessage">ข้อความรายละเอียดเมื่อถูกล็อกหน้าจอ</label>
+                <textarea id="maintenanceMessage" rows="2" placeholder="ขณะนี้ระบบ NK Helper อยู่ระหว่างการปรับปรุงระบบเพื่อความเสถียร กรุณารอสักครู่หรือติดต่อแอดมิน"></textarea>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 2: VERSION & UPDATE CONTROL -->
+        <section class="card section-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-icon">🚀</span>
+              <div>
+                <h2>การจัดการเวอร์ชันและการอัปเดต (Version Management)</h2>
+                <p class="card-desc">กำหนดเวอร์ชันล่าสุด บังคับให้อัปเดต และใส่ลิงก์ดาวน์โหลดตัวติดตั้งใหม่</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="latestVersion">เลขเวอร์ชันล่าสุด (Latest Version)</label>
+                <input type="text" id="latestVersion" placeholder="3.5.2" style="font-weight: 600;">
+              </div>
+              <div class="form-group">
+                <label for="minSupportedVersion">เวอร์ชันขั้นต่ำที่ยอมรับ (Min Version)</label>
+                <input type="text" id="minSupportedVersion" placeholder="3.5.0">
+              </div>
+              <div class="form-group flex-center-col">
+                <label>บังคับอัปเดตทันที (Force Update)</label>
+                <div class="toggle-wrapper" style="margin-top: 4px;">
+                  <label class="switch">
+                    <input type="checkbox" id="chkForceUpdate">
+                    <span class="slider round"></span>
+                  </label>
+                  <span id="txtForceUpdateStatus" class="toggle-status-label text-muted">ไม่บังคับ</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="downloadUrl">ลิงก์ดาวน์โหลดไฟล์ติดตั้ง (.exe Installer URL)</label>
+              <input type="url" id="downloadUrl" placeholder="https://github.com/your-repo/releases/download/v3.5.2/NK-Helper-Setup.exe">
+              <small class="form-help">💡 สามารถใส่ลิงก์ Google Drive, GitHub Release, หรือ Cloud Storage ได้</small>
+            </div>
+
+            <div class="form-group">
+              <label for="releaseNotes">รายละเอียดการอัปเดต (Release Notes)</label>
+              <textarea id="releaseNotes" rows="2" placeholder="รายละเอียดการปรับปรุง..."></textarea>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 3: BROADCAST ANNOUNCEMENT -->
+        <section class="card section-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-icon">📢</span>
+              <div>
+                <h2>ประกาศข้อความด่วน (Broadcast Announcement)</h2>
+                <p class="card-desc">ส่งแถบข้อความประกาศแสดงที่ด้านบนสุดของทุกเครื่องที่กำลังเปิดโปรแกรม</p>
+              </div>
+            </div>
+            <div class="toggle-wrapper">
+              <label class="switch">
+                <input type="checkbox" id="chkBroadcastEnabled">
+                <span class="slider round"></span>
+              </label>
+              <span id="txtBroadcastStatus" class="toggle-status-label text-muted">ปิดประกาศ</span>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <div class="form-row">
+              <div class="form-group" style="max-width: 220px;">
+                <label for="broadcastType">ระดับความสำคัญ</label>
+                <select id="broadcastType">
+                  <option value="info">🔵 ข้อมูลทั่วไป (Info)</option>
+                  <option value="warning">🟡 แจ้งเตือน (Warning)</option>
+                  <option value="danger">🔴 ด่วนมาก (Critical)</option>
+                </select>
+              </div>
+              <div class="form-group flex-1">
+                <label for="broadcastMessage">ข้อความประกาศ</label>
+                <input type="text" id="broadcastMessage" placeholder="เช่น กรุณาตรวจสอบยอดฝาก-ถอนของวันนี้ก่อน 23:59 น.">
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 4: LIVE CONNECTED CLIENTS -->
+        <section class="card section-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-icon">🖥️</span>
+              <div>
+                <h2>เครื่องที่กำลังเปิดใช้งาน (Live Active Clients)</h2>
+                <p class="card-desc">ตรวจสอบเครื่อง Desktop ที่กำลังรันโปรแกรมและส่ง Heartbeat เข้ามา</p>
+              </div>
+            </div>
+            <button id="btnRefreshClients" class="btn btn-outline btn-sm">🔄 รีเฟรชข้อมูล</button>
+          </div>
+
+          <div class="card-body table-responsive">
+            <table class="clients-table">
+              <thead>
+                <tr>
+                  <th>สถานะ</th>
+                  <th>ผู้ใช้งาน (User)</th>
+                  <th>เว็บไซต์ (Site)</th>
+                  <th>เวอร์ชัน</th>
+                  <th>ชื่อเครื่อง / OS</th>
+                  <th>ออนไลน์ล่าสุด</th>
+                  <th>IP Address</th>
+                </tr>
+              </thead>
+              <tbody id="clientsTableBody">
+                <tr>
+                  <td colspan="7" class="text-center py-4 text-muted">กำลังโหลดข้อมูลเครื่องที่เชื่อมต่อ...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- SECTION 5: MASTER SECURITY & PASSWORD -->
+        <section class="card section-card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <span class="card-icon">🔐</span>
+              <div>
+                <h2>ความปลอดภัยและรหัสผ่านผู้ควบคุม (Master Account Security)</h2>
+                <p class="card-desc">กำหนดชื่อผู้ใช้และรหัสผ่านส่วนตัวสำหรับเข้าหน้าควบคุมนี้ (เฉพาะคุณเท่านั้นที่รู้)</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card-body">
+            <form id="changePasswordForm">
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="changeCurrentPassword">รหัสผ่านปัจจุบัน (Current Password)</label>
+                  <input type="password" id="changeCurrentPassword" placeholder="••••••••" required autocomplete="current-password">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="changeNewUsername">ชื่อผู้ใช้ใหม่ (New Username) — ปล่อยว่างถ้าไม่ต้องการเปลี่ยน</label>
+                  <input type="text" id="changeNewUsername" placeholder="เช่น myadmin หรือ admin">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="changeNewPassword">รหัสผ่านใหม่ (New Password)</label>
+                  <input type="password" id="changeNewPassword" placeholder="อย่างน้อย 4 ตัวอักษร" required autocomplete="new-password">
+                </div>
+                <div class="form-group flex-1">
+                  <label for="changeConfirmPassword">ยืนยันรหัสผ่านใหม่ (Confirm Password)</label>
+                  <input type="password" id="changeConfirmPassword" placeholder="พิมพ์รหัสใหม่อีกครั้ง" required autocomplete="new-password">
+                </div>
+              </div>
+              <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+                <button type="submit" id="btnChangePassword" class="btn btn-outline" style="border-color: var(--primary); color: #93c5fd;">
+                  <span>🔑 บันทึกรหัสผ่านใหม่</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <!-- Sticky Floating Action Bar -->
+    <div class="floating-save-bar">
+      <div class="save-bar-content">
+        <span class="save-hint">เมื่อแก้ไขการตั้งค่าแล้ว อย่าลืมกดบันทึกเพื่อให้มีผลทันที</span>
+        <button id="btnSaveConfig" class="btn btn-primary btn-save">
+          <span class="btn-text">💾 บันทึกการเปลี่ยนแปลง (Save)</span>
+          <span class="btn-spinner hidden"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
