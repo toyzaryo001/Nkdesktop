@@ -24,10 +24,8 @@
 2. เปิด Terminal ในโฟลเดอร์ `NK-Admin-Server` แล้วรันคำสั่ง:
 ```bash
 cd d:\Project\NK\NK-Admin-Server
-git add .
-git commit -m "feat: NK master admin control center"
 git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/nk-admin-server.git
+git remote add origin https://github.com/toyzaryo001/Nkdesktop.git
 git push -u origin main
 ```
 
