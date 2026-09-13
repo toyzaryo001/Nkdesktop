@@ -316,7 +316,7 @@ function renderClientsTable(clients, totalOnline) {
   if (clients.length === 0) {
     clientsTableBody.innerHTML = `
       <tr>
-        <td colspan="7" class="text-center py-4 text-muted" style="text-align: center; padding: 30px;">
+        <td colspan="9" class="text-center py-4 text-muted" style="text-align: center; padding: 30px;">
           ยังไม่มีเครื่อง Desktop เปิดใช้งานในขณะนี้
         </td>
       </tr>
@@ -334,18 +334,47 @@ function renderClientsTable(clients, totalOnline) {
       statusBadge = '<span class="client-badge offline">⚪ ออฟไลน์</span>';
     }
 
+    const deviceIdDisplay = client.deviceUuid 
+      ? `<code title="${escapeHtml(client.deviceUuid)}" style="font-size: 11px; background: rgba(0,242,254,0.08); color: var(--accent-cyan); padding: 2px 6px; border-radius: 4px;">${escapeHtml(client.deviceUuid.length > 18 ? client.deviceUuid.substring(0, 18) + '...' : client.deviceUuid)}</code>`
+      : `<span class="text-muted">-</span>`;
+
+    const uptimeDisplay = formatUptime(client.uptimeSeconds);
+    const hostOsDisplay = `${escapeHtml(client.hostname || 'desktop')} <span class="text-muted" style="font-size: 11px;">(${escapeHtml(client.os || 'win32')}/${escapeHtml(client.arch || 'x64')})</span>`;
+
     return `
       <tr>
         <td>${statusBadge}</td>
-        <td><strong>${escapeHtml(client.username)}</strong></td>
-        <td><span class="badge badge-site">${escapeHtml(client.siteName)}</span></td>
-        <td><code>v${escapeHtml(client.version)}</code></td>
-        <td>${escapeHtml(client.hostname)} (${escapeHtml(client.os)})</td>
-        <td class="text-muted">${formatTimeAgo(client.diffSec)}</td>
+        <td><strong>${escapeHtml(client.username || 'นิรนาม')}</strong></td>
+        <td><span class="badge badge-site">${escapeHtml(client.siteName || 'ไม่ระบุเว็บ')}</span></td>
+        <td><code style="font-weight: 600; color: #38ef7d;">v${escapeHtml(client.version || '3.6.0')}</code></td>
+        <td>${deviceIdDisplay}</td>
+        <td>${hostOsDisplay}</td>
+        <td style="font-size: 12px; color: var(--text-secondary);">${uptimeDisplay}</td>
+        <td class="text-muted" style="font-size: 12px;">${formatTimeAgo(client.diffSec)}</td>
         <td><code>${escapeHtml(client.ip || '-')}</code></td>
       </tr>
     `;
   }).join('');
+}
+
+function formatTimeAgo(sec) {
+  const s = Math.max(0, Math.floor(sec || 0));
+  if (s < 5) return 'เมื่อสักครู่';
+  if (s < 60) return `${s} วินาทีที่แล้ว`;
+  if (s < 3600) return `${Math.floor(s / 60)} นาทีที่แล้ว`;
+  return `${Math.floor(s / 3600)} ชม. ที่แล้ว`;
+}
+
+function formatUptime(sec) {
+  const s = Math.max(0, Math.floor(sec || 0));
+  if (s <= 0) return 'เพิ่งเริ่ม';
+  if (s < 60) return `${s} วินาที`;
+  const m = Math.floor(s / 60);
+  const remS = s % 60;
+  if (m < 60) return `${m} นาที ${remS} วิ`;
+  const h = Math.floor(m / 60);
+  const remM = m % 60;
+  return `${h} ชม. ${remM} นาที`;
 }
 
 function escapeHtml(str) {

@@ -78,11 +78,11 @@ const DEFAULT_CONFIG = {
     contact: 'ติดต่อผู้ดูแลระบบ'
   },
   version: {
-    latestVersion: '3.5.2',
+    latestVersion: '3.6.0',
     minSupportedVersion: '3.5.0',
     forceUpdate: false,
     downloadUrl: '',
-    releaseNotes: 'ปรับปรุงประสิทธิภาพ ระบบออโต้ และการรวมยอดให้แม่นยำยิ่งขึ้น'
+    releaseNotes: 'NK Helper Desktop v3.6.0 (Enterprise Online) — ระบบควบคุมออนไลน์เต็มรูปแบบ ตารางเหลืองบวกรวมยอดเติม-ลดแม่นยำ 100%'
   },
   broadcast: {
     enabled: false,
@@ -197,21 +197,27 @@ app.get('/api/app-control', (req, res) => {
 // 2. Heartbeat (NK Desktop reports its live status)
 app.post('/api/app-heartbeat', (req, res) => {
   try {
-    const { clientId, username, siteName, websiteId, version, os, hostname } = req.body || {};
-    if (!clientId) {
-      return res.status(400).json({ ok: false, error: 'Missing clientId' });
+    const { clientId, deviceUuid, username, siteName, websiteId, version, build, os, arch, hostname, uptimeSeconds, memoryMb } = req.body || {};
+    const effectiveId = deviceUuid || clientId;
+    if (!effectiveId) {
+      return res.status(400).json({ ok: false, error: 'Missing clientId or deviceUuid' });
     }
 
     const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
 
-    activeClients.set(clientId, {
-      clientId,
+    activeClients.set(effectiveId, {
+      clientId: effectiveId,
+      deviceUuid: deviceUuid || effectiveId,
       username: username || 'นิรนาม',
       siteName: siteName || 'ไม่ระบุเว็บ',
       websiteId: websiteId || 0,
-      version: version || 'ไม่ระบุ',
+      version: version || '3.6.0',
+      build: build || 'v3.6.0',
       os: os || 'Windows',
+      arch: arch || 'x64',
       hostname: hostname || 'desktop-client',
+      uptimeSeconds: Number(uptimeSeconds) || 0,
+      memoryMb: Number(memoryMb) || 0,
       lastSeen: Date.now(),
       ip: String(clientIp).replace('::ffff:', '')
     });
