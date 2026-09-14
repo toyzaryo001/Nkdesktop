@@ -174,6 +174,12 @@ function switchView(viewName) {
   if (topbarTitle) topbarTitle.textContent = meta.title;
   if (topbarSubtitle) topbarSubtitle.textContent = meta.subtitle;
 
+  // Show Topbar Save button ONLY on views that actually edit system settings!
+  const settingsViews = ['control', 'version', 'broadcast'];
+  if (btnSaveConfig) {
+    btnSaveConfig.style.display = settingsViews.includes(viewName) ? 'inline-flex' : 'none';
+  }
+
   closeSidebarMobile();
 }
 

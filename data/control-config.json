@@ -1,0 +1,22 @@
+﻿{
+  "appEnabled": true,
+  "maintenance": {
+    "title": "ระบบปิดปรับปรุงชั่วคราว",
+    "message": "ขณะนี้ระบบ NK Helper อยู่ระหว่างการปรับปรุงระบบเพื่อความเสถียร กรุณารอสักครู่หรือติดต่อผู้ดูแลระบบ",
+    "contact": "ติดต่อผู้ดูแลระบบ"
+  },
+  "version": {
+    "latestVersion": "3.6.0",
+    "minSupportedVersion": "3.5.0",
+    "forceUpdate": false,
+    "downloadUrl": "",
+    "releaseNotes": "NK Helper Desktop v3.6.0 (Enterprise Online) — ระบบควบคุมออนไลน์เต็มรูปแบบ ตารางเหลืองบวกรวมยอดเติม-ลดแม่นยำ 100%"
+  },
+  "broadcast": {
+    "enabled": false,
+    "type": "info",
+    "message": ""
+  },
+  "updatedAt": "2026-09-14T01:50:00.000Z",
+  "updatedBy": "admin"
+}

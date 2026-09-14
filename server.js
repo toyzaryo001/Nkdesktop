@@ -16,20 +16,40 @@ const wss = new WebSocketServer({ server });
 const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'nk_admin_secret_key_railway_2026';
 
-// Ensure data directory exists
-const DATA_DIR = path.join(__dirname, 'data');
+// Ensure data directory exists (Supports Railway Volume, e.g. /app/data or /data)
+function resolveDataDir() {
+  const envPath = process.env.RAILWAY_VOLUME_MOUNT_PATH || process.env.DATA_PATH;
+  if (envPath && fs.existsSync(envPath)) {
+    return envPath;
+  }
+  if (fs.existsSync('/app/data')) {
+    return '/app/data';
+  }
+  if (fs.existsSync('/data')) {
+    return '/data';
+  }
+  const localDir = path.join(__dirname, 'data');
+  if (!fs.existsSync(localDir)) {
+    try { fs.mkdirSync(localDir, { recursive: true }); } catch (e) {}
+  }
+  return localDir;
+}
+
+const DATA_DIR = resolveDataDir();
 if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (e) {}
 }
 
 // ==== 1. Independent Master Auth Storage ====
 const AUTH_FILE = path.join(DATA_DIR, 'admin-auth.json');
+const BUNDLED_AUTH_FILE = path.join(__dirname, 'data', 'admin-auth.json');
 
 function hashPassword(password, salt) {
   return crypto.pbkdf2Sync(String(password), salt, 100000, 64, 'sha512').toString('hex');
 }
 
 function loadAdminAuth() {
+  // 1. Load from persistent volume file
   try {
     if (fs.existsSync(AUTH_FILE)) {
       const raw = fs.readFileSync(AUTH_FILE, 'utf8');
@@ -42,10 +62,22 @@ function loadAdminAuth() {
     console.error('Error loading admin auth:', err.message);
   }
 
-  // Default credentials (creator can change anytime in UI or via Railway Env)
+  // 2. Load from bundled baseline file if in a new container
+  try {
+    if (BUNDLED_AUTH_FILE !== AUTH_FILE && fs.existsSync(BUNDLED_AUTH_FILE)) {
+      const raw = fs.readFileSync(BUNDLED_AUTH_FILE, 'utf8');
+      const data = JSON.parse(raw);
+      if (data && data.username && data.passwordHash && data.salt) {
+        saveAdminAuth(data);
+        return data;
+      }
+    }
+  } catch (e) {}
+
+  // 3. Default credentials fallback
   const defaultUser = process.env.ADMIN_USERNAME || 'admin';
   const defaultPass = process.env.ADMIN_PASSWORD || 'admin888';
-  const salt = crypto.randomBytes(16).toString('hex');
+  const salt = 'a1b2c3d4e5f67890';
   const passwordHash = hashPassword(defaultPass, salt);
 
   const initialAuth = {
@@ -62,6 +94,9 @@ function loadAdminAuth() {
 function saveAdminAuth(authData) {
   try {
     fs.writeFileSync(AUTH_FILE, JSON.stringify(authData, null, 2), 'utf8');
+    if (BUNDLED_AUTH_FILE !== AUTH_FILE && fs.existsSync(path.join(__dirname, 'data'))) {
+      try { fs.writeFileSync(BUNDLED_AUTH_FILE, JSON.stringify(authData, null, 2), 'utf8'); } catch (e) {}
+    }
     return true;
   } catch (err) {
     console.error('Error saving admin auth:', err.message);
@@ -73,6 +108,7 @@ let adminAuth = loadAdminAuth();
 
 // ==== 2. Control Config Storage ====
 const CONFIG_FILE = path.join(DATA_DIR, 'control-config.json');
+const BUNDLED_CONFIG_FILE = path.join(__dirname, 'data', 'control-config.json');
 
 const DEFAULT_CONFIG = {
   appEnabled: true,
@@ -98,6 +134,7 @@ const DEFAULT_CONFIG = {
 };
 
 function loadConfig() {
+  // 1. Try persistent volume file
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       const raw = fs.readFileSync(CONFIG_FILE, 'utf8');
@@ -105,8 +142,20 @@ function loadConfig() {
       return { ...DEFAULT_CONFIG, ...parsed };
     }
   } catch (err) {
-    console.error('Error loading config, using default:', err.message);
+    console.error('Error loading config from persistent file:', err.message);
   }
+
+  // 2. Try bundled git baseline file
+  try {
+    if (BUNDLED_CONFIG_FILE !== CONFIG_FILE && fs.existsSync(BUNDLED_CONFIG_FILE)) {
+      const raw = fs.readFileSync(BUNDLED_CONFIG_FILE, 'utf8');
+      const parsed = JSON.parse(raw);
+      const merged = { ...DEFAULT_CONFIG, ...parsed };
+      saveConfig(merged);
+      return merged;
+    }
+  } catch (e) {}
+
   saveConfig(DEFAULT_CONFIG);
   return DEFAULT_CONFIG;
 }
@@ -114,6 +163,9 @@ function loadConfig() {
 function saveConfig(cfg) {
   try {
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), 'utf8');
+    if (BUNDLED_CONFIG_FILE !== CONFIG_FILE && fs.existsSync(path.join(__dirname, 'data'))) {
+      try { fs.writeFileSync(BUNDLED_CONFIG_FILE, JSON.stringify(cfg, null, 2), 'utf8'); } catch (e) {}
+    }
     return true;
   } catch (err) {
     console.error('Error saving config:', err.message);
