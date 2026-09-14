@@ -4,11 +4,15 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
+const http = require('http');
+const { WebSocketServer, WebSocket } = require('ws');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
 const app = express();
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
 const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'nk_admin_secret_key_railway_2026';
 
@@ -125,6 +129,156 @@ const sessions = new Map();
 // In-memory connected clients: clientId -> { clientId, username, siteName, websiteId, version, os, hostname, lastSeen, ip }
 const activeClients = new Map();
 
+// WebSocket tracking
+const desktopSockets = new Map(); // ws -> { boundClientId, lastSeen }
+const adminSockets = new Set();   // Set of ws
+
+function broadcastToDesktops(payload) {
+  const msg = JSON.stringify(payload);
+  for (const [ws] of desktopSockets.entries()) {
+    if (ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(msg);
+      } catch (err) {
+        console.error('WS Desktop broadcast error:', err.message);
+      }
+    }
+  }
+}
+
+function broadcastToAdmins(payload) {
+  const msg = JSON.stringify(payload);
+  for (const ws of adminSockets) {
+    if (ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(msg);
+      } catch (err) {
+        console.error('WS Admin broadcast error:', err.message);
+      }
+    }
+  }
+}
+
+function getClientsData() {
+  const now = Date.now();
+  const list = [];
+  for (const client of activeClients.values()) {
+    const diffSec = Math.floor((now - client.lastSeen) / 1000);
+    const status = diffSec <= 180 ? 'online' : (diffSec <= 360 ? 'idle' : 'offline');
+    list.push({
+      ...client,
+      diffSec,
+      status
+    });
+  }
+  list.sort((a, b) => b.lastSeen - a.lastSeen);
+  return {
+    clients: list,
+    totalOnline: list.filter(c => c.status === 'online').length
+  };
+}
+
+function broadcastClientsUpdateToAdmins() {
+  const data = getClientsData();
+  broadcastToAdmins({
+    type: 'CLIENTS_UPDATED',
+    clients: data.clients,
+    totalOnline: data.totalOnline,
+    timestamp: Date.now()
+  });
+}
+
+// Handle WebSocket connections
+wss.on('connection', (ws, req) => {
+  const url = req.url || '';
+
+  // 1. Admin Dashboard WebSocket Connection
+  if (url.startsWith('/ws/admin')) {
+    adminSockets.add(ws);
+    const clientData = getClientsData();
+    ws.send(JSON.stringify({
+      type: 'INIT',
+      config: appConfig,
+      clients: clientData.clients,
+      totalOnline: clientData.totalOnline,
+      serverTime: Date.now()
+    }));
+
+    ws.on('close', () => {
+      adminSockets.delete(ws);
+    });
+
+    ws.on('error', () => {
+      adminSockets.delete(ws);
+    });
+    return;
+  }
+
+  // 2. Desktop Client WebSocket Connection (/ws/client or default)
+  let boundClientId = null;
+  desktopSockets.set(ws, { connectedAt: Date.now() });
+
+  // Send current configuration immediately upon connecting
+  ws.send(JSON.stringify({
+    type: 'CONFIG_CHANGED',
+    appEnabled: appConfig.appEnabled,
+    maintenance: appConfig.maintenance,
+    version: appConfig.version,
+    broadcast: appConfig.broadcast,
+    serverTime: Date.now()
+  }));
+
+  ws.on('message', (raw) => {
+    try {
+      const data = JSON.parse(raw.toString());
+      if (data.type === 'HEARTBEAT' || data.type === 'HANDSHAKE') {
+        const { deviceUuid, clientId, username, siteName, websiteId, version, build, os, arch, hostname, uptimeSeconds, memoryMb } = data;
+        const effectiveId = deviceUuid || clientId;
+        if (effectiveId) {
+          boundClientId = effectiveId;
+          const clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '';
+          activeClients.set(effectiveId, {
+            clientId: effectiveId,
+            deviceUuid: deviceUuid || effectiveId,
+            username: username || 'นิรนาม',
+            siteName: siteName || 'ไม่ระบุเว็บ',
+            websiteId: websiteId || 0,
+            version: version || '3.6.0',
+            build: build || 'v3.6.0',
+            os: os || 'Windows',
+            arch: arch || 'x64',
+            hostname: hostname || 'desktop-client',
+            uptimeSeconds: Number(uptimeSeconds) || 0,
+            memoryMb: Number(memoryMb) || 0,
+            lastSeen: Date.now(),
+            ip: String(clientIp).replace('::ffff:', '')
+          });
+          desktopSockets.set(ws, { boundClientId, lastSeen: Date.now() });
+          broadcastClientsUpdateToAdmins();
+        }
+
+        ws.send(JSON.stringify({
+          type: 'PONG',
+          appEnabled: appConfig.appEnabled,
+          serverTime: Date.now()
+        }));
+      }
+    } catch (err) {
+      // Ignore malformed WS message
+    }
+  });
+
+  ws.on('close', () => {
+    desktopSockets.delete(ws);
+    broadcastClientsUpdateToAdmins();
+  });
+
+  ws.on('error', () => {
+    desktopSockets.delete(ws);
+    broadcastClientsUpdateToAdmins();
+  });
+});
+
 // Clean up stale sessions and clients every 60s
 setInterval(() => {
   const now = Date.now();
@@ -138,6 +292,7 @@ setInterval(() => {
       activeClients.delete(clientId);
     }
   }
+  broadcastClientsUpdateToAdmins();
 }, 60 * 1000);
 
 // Middlewares
@@ -221,6 +376,8 @@ app.post('/api/app-heartbeat', (req, res) => {
       lastSeen: Date.now(),
       ip: String(clientIp).replace('::ffff:', '')
     });
+
+    broadcastClientsUpdateToAdmins();
 
     res.json({
       ok: true,
@@ -390,34 +547,63 @@ app.post('/api/admin/config', requireAuth, (req, res) => {
 
     saveConfig(appConfig);
 
-    res.json({ ok: true, config: appConfig, message: 'บันทึกการตั้งค่าเรียบร้อยแล้ว' });
+    // Instant Real-time Broadcast to all connected Desktop clients & Admin Dashboards
+    broadcastToDesktops({
+      type: 'CONFIG_CHANGED',
+      appEnabled: appConfig.appEnabled,
+      maintenance: appConfig.maintenance,
+      version: appConfig.version,
+      broadcast: appConfig.broadcast,
+      serverTime: Date.now()
+    });
+
+    broadcastToAdmins({
+      type: 'CONFIG_UPDATED',
+      config: appConfig,
+      serverTime: Date.now()
+    });
+
+    res.json({ ok: true, config: appConfig, message: 'บันทึกการตั้งค่าและส่งคำสั่งเรียลไทม์เรียบร้อยแล้ว' });
   } catch (err) {
     res.status(500).json({ ok: false, error: 'บันทึกไม่สำเร็จ: ' + err.message });
   }
 });
 
+// Force Kick & Lockout All Connected Desktop Clients Immediately
+app.post('/api/admin/kick-all', requireAuth, (req, res) => {
+  try {
+    appConfig.appEnabled = false;
+    appConfig.updatedAt = new Date().toISOString();
+    appConfig.updatedBy = req.user.name || req.user.username;
+    saveConfig(appConfig);
+
+    // Instant Real-time Kill Switch push to all desktop clients
+    broadcastToDesktops({
+      type: 'FORCE_LOCKOUT',
+      appEnabled: false,
+      maintenance: appConfig.maintenance,
+      serverTime: Date.now()
+    });
+
+    broadcastToAdmins({
+      type: 'CONFIG_UPDATED',
+      config: appConfig,
+      serverTime: Date.now()
+    });
+
+    res.json({ ok: true, config: appConfig, message: 'สั่งดีดผู้ใช้งานออกจากระบบและล็อกหน้าจอทุกเครื่องทันทีเรียบร้อยแล้ว' });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: 'คำสั่งล้มเหลว: ' + err.message });
+  }
+});
+
 // Get Connected Active Clients
 app.get('/api/admin/clients', requireAuth, (_req, res) => {
-  const now = Date.now();
-  const list = [];
-
-  for (const client of activeClients.values()) {
-    const diffSec = Math.floor((now - client.lastSeen) / 1000);
-    const status = diffSec <= 180 ? 'online' : (diffSec <= 360 ? 'idle' : 'offline');
-    list.push({
-      ...client,
-      diffSec,
-      status
-    });
-  }
-
-  // Sort by lastSeen descending
-  list.sort((a, b) => b.lastSeen - a.lastSeen);
-
+  const data = getClientsData();
   res.json({
     ok: true,
-    clients: list,
-    totalOnline: list.filter(c => c.status === 'online').length
+    clients: data.clients,
+    totalOnline: data.totalOnline
   });
 });
 
@@ -426,12 +612,13 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Start Server
-app.listen(PORT, () => {
+// Start Server (with WebSocket Support)
+server.listen(PORT, () => {
   console.log(`=============================================`);
   console.log(`🚀 NK Master Admin Server running on port ${PORT}`);
   console.log(`📍 Web Dashboard: http://localhost:${PORT}`);
   console.log(`🔑 Master User:   ${adminAuth.username}`);
   console.log(`🔌 Desktop API:   http://localhost:${PORT}/api/app-control`);
+  console.log(`⚡ WebSocket URL: ws://localhost:${PORT}/ws/client`);
   console.log(`=============================================`);
 });
