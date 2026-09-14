@@ -9,6 +9,7 @@ const { WebSocketServer, WebSocket } = require('ws');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { Pool } = require('pg');
 
 const app = express();
 const server = http.createServer(app);
@@ -91,7 +92,7 @@ function loadAdminAuth() {
   return initialAuth;
 }
 
-function saveAdminAuth(authData) {
+function saveAdminAuthFile(authData) {
   try {
     fs.writeFileSync(AUTH_FILE, JSON.stringify(authData, null, 2), 'utf8');
     if (BUNDLED_AUTH_FILE !== AUTH_FILE && fs.existsSync(path.join(__dirname, 'data'))) {
@@ -101,6 +102,21 @@ function saveAdminAuth(authData) {
   } catch (err) {
     console.error('Error saving admin auth:', err.message);
     return false;
+  }
+}
+
+async function saveAdminAuth(authData) {
+  saveAdminAuthFile(authData);
+  if (dbPool) {
+    try {
+      await dbPool.query(
+        `INSERT INTO admin_auth (username, salt, password_hash, updated_at) VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (username) DO UPDATE SET salt = $2, password_hash = $3, updated_at = NOW();`,
+        [authData.username, authData.salt, authData.passwordHash]
+      );
+    } catch (err) {
+      console.error('Error saving admin auth to PostgreSQL:', err.message);
+    }
   }
 }
 
@@ -151,16 +167,16 @@ function loadConfig() {
       const raw = fs.readFileSync(BUNDLED_CONFIG_FILE, 'utf8');
       const parsed = JSON.parse(raw);
       const merged = { ...DEFAULT_CONFIG, ...parsed };
-      saveConfig(merged);
+      saveConfigFile(merged);
       return merged;
     }
   } catch (e) {}
 
-  saveConfig(DEFAULT_CONFIG);
+  saveConfigFile(DEFAULT_CONFIG);
   return DEFAULT_CONFIG;
 }
 
-function saveConfig(cfg) {
+function saveConfigFile(cfg) {
   try {
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(cfg, null, 2), 'utf8');
     if (BUNDLED_CONFIG_FILE !== CONFIG_FILE && fs.existsSync(path.join(__dirname, 'data'))) {
@@ -173,7 +189,110 @@ function saveConfig(cfg) {
   }
 }
 
+async function saveConfig(cfg) {
+  saveConfigFile(cfg);
+  if (dbPool) {
+    try {
+      await dbPool.query(
+        `INSERT INTO system_config (key, value, updated_at) VALUES ('app_config', $1, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW();`,
+        [cfg]
+      );
+    } catch (err) {
+      console.error('Error saving config to PostgreSQL:', err.message);
+    }
+  }
+}
+
 let appConfig = loadConfig();
+
+// ==== 3. PostgreSQL Database Connection & Auto-Migration ====
+let dbPool = null;
+const DATABASE_URL = process.env.DATABASE_URL || process.env.DATABASE_PUBLIC_URL;
+
+if (DATABASE_URL) {
+  try {
+    dbPool = new Pool({
+      connectionString: DATABASE_URL,
+      ssl: DATABASE_URL.includes('localhost') ? false : { rejectUnauthorized: false }
+    });
+    dbPool.on('error', (err) => {
+      console.error('PostgreSQL client pool error:', err.message);
+    });
+  } catch (err) {
+    console.error('Failed to create PostgreSQL pool:', err.message);
+  }
+}
+
+async function initDatabase() {
+  if (!dbPool) {
+    console.log('ℹ️ Running in JSON file storage mode (No DATABASE_URL configured).');
+    return;
+  }
+
+  try {
+    const client = await dbPool.connect();
+    try {
+      // 1. Create table for system configuration
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS system_config (
+          key VARCHAR(100) PRIMARY KEY,
+          value JSONB NOT NULL,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      // 2. Create table for master admin credentials
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS admin_auth (
+          username VARCHAR(100) PRIMARY KEY,
+          salt VARCHAR(255) NOT NULL,
+          password_hash VARCHAR(255) NOT NULL,
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      console.log('✅ PostgreSQL connected and tables verified.');
+
+      // Load config from DB if exists
+      const configRes = await client.query(`SELECT value FROM system_config WHERE key = 'app_config' LIMIT 1;`);
+      if (configRes.rows.length > 0 && configRes.rows[0].value) {
+        appConfig = { ...DEFAULT_CONFIG, ...configRes.rows[0].value };
+        saveConfigFile(appConfig);
+        console.log('✅ Synchronized latest app_config from PostgreSQL.');
+      } else {
+        await client.query(
+          `INSERT INTO system_config (key, value, updated_at) VALUES ('app_config', $1, NOW()) ON CONFLICT (key) DO NOTHING;`,
+          [appConfig]
+        );
+        console.log('✅ Seeded initial app_config into PostgreSQL.');
+      }
+
+      // Load auth from DB if exists
+      const authRes = await client.query(`SELECT username, salt, password_hash, updated_at FROM admin_auth WHERE username = $1 LIMIT 1;`, [adminAuth.username]);
+      if (authRes.rows.length > 0) {
+        adminAuth = {
+          username: authRes.rows[0].username,
+          salt: authRes.rows[0].salt,
+          passwordHash: authRes.rows[0].password_hash,
+          updatedAt: authRes.rows[0].updated_at
+        };
+        saveAdminAuthFile(adminAuth);
+        console.log('✅ Synchronized latest admin_auth from PostgreSQL.');
+      } else {
+        await client.query(
+          `INSERT INTO admin_auth (username, salt, password_hash, updated_at) VALUES ($1, $2, $3, NOW()) ON CONFLICT (username) DO NOTHING;`,
+          [adminAuth.username, adminAuth.salt, adminAuth.passwordHash]
+        );
+        console.log('✅ Seeded initial admin_auth into PostgreSQL.');
+      }
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    console.error('❌ Error initializing PostgreSQL tables:', err.message);
+  }
+}
 
 // In-memory active sessions: token -> { user, expiresAt }
 const sessions = new Map();
@@ -555,7 +674,7 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
 });
 
 // Change Master Credentials (Username & Password)
-app.post('/api/admin/change-password', requireAuth, (req, res) => {
+app.post('/api/admin/change-password', requireAuth, async (req, res) => {
   try {
     const { currentPassword, newUsername, newPassword } = req.body || {};
 
@@ -583,7 +702,7 @@ app.post('/api/admin/change-password', requireAuth, (req, res) => {
     adminAuth.passwordHash = newHash;
     adminAuth.updatedAt = new Date().toISOString();
 
-    saveAdminAuth(adminAuth);
+    await saveAdminAuth(adminAuth);
 
     return res.json({
       ok: true,
@@ -613,7 +732,7 @@ app.get('/api/admin/config', requireAuth, (_req, res) => {
 });
 
 // Update Config
-app.post('/api/admin/config', requireAuth, (req, res) => {
+app.post('/api/admin/config', requireAuth, async (req, res) => {
   try {
     const { appEnabled, maintenance, version, broadcast } = req.body || {};
 
@@ -650,7 +769,7 @@ app.post('/api/admin/config', requireAuth, (req, res) => {
     appConfig.updatedAt = new Date().toISOString();
     appConfig.updatedBy = req.user.name || req.user.username;
 
-    saveConfig(appConfig);
+    await saveConfig(appConfig);
 
     // Instant Real-time Broadcast to all connected Desktop clients & Admin Dashboards
     broadcastToDesktops({
@@ -675,12 +794,12 @@ app.post('/api/admin/config', requireAuth, (req, res) => {
 });
 
 // Force Kick & Lockout All Connected Desktop Clients Immediately
-app.post('/api/admin/kick-all', requireAuth, (req, res) => {
+app.post('/api/admin/kick-all', requireAuth, async (req, res) => {
   try {
     appConfig.appEnabled = false;
     appConfig.updatedAt = new Date().toISOString();
     appConfig.updatedBy = req.user.name || req.user.username;
-    saveConfig(appConfig);
+    await saveConfig(appConfig);
 
     // Instant Real-time Kill Switch push to all desktop clients
     broadcastToDesktops({
@@ -718,7 +837,8 @@ app.get('*', (req, res) => {
 });
 
 // Start Server (with WebSocket Support)
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
+  await initDatabase();
   console.log(`=============================================`);
   console.log(`🚀 NK Master Admin Server running on port ${PORT}`);
   console.log(`📍 Web Dashboard: http://localhost:${PORT}`);
