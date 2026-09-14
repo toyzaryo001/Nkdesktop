@@ -10,6 +10,12 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { Pool } = require('pg');
+const multer = require('multer');
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 300 * 1024 * 1024 } // Support up to 300MB installers
+});
 
 const app = express();
 const server = http.createServer(app);
@@ -257,6 +263,18 @@ async function initDatabase() {
           salt VARCHAR(255) NOT NULL,
           password_hash VARCHAR(255) NOT NULL,
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      // 3. Create table for file storage in PostgreSQL (Installer .exe, etc.)
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS app_files (
+          id VARCHAR(100) PRIMARY KEY,
+          filename VARCHAR(255) NOT NULL,
+          mime_type VARCHAR(100) NOT NULL,
+          size_bytes BIGINT NOT NULL,
+          file_data BYTEA NOT NULL,
+          uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
         );
       `);
 
@@ -643,6 +661,57 @@ app.get('/api/app-control', (req, res) => {
   });
 });
 
+// Public Download Endpoint for Latest Installer File
+app.get('/api/download/installer', async (req, res) => {
+  try {
+    const binPath = path.join(DATA_DIR, 'uploads', 'latest_installer.bin');
+    const metaPath = path.join(DATA_DIR, 'uploads', 'latest_installer.json');
+
+    // 1. If cached on local disk, stream it immediately
+    if (fs.existsSync(binPath) && fs.existsSync(metaPath)) {
+      try {
+        const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+        res.setHeader('Content-Type', meta.mime_type || 'application/octet-stream');
+        res.setHeader('Content-Length', meta.size_bytes);
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(meta.filename || 'NK-Helper-Setup.exe')}"`);
+        return fs.createReadStream(binPath).pipe(res);
+      } catch (e) {}
+    }
+
+    // 2. Fetch from PostgreSQL database if not on disk
+    if (dbPool) {
+      const dbRes = await dbPool.query(`SELECT filename, mime_type, size_bytes, file_data FROM app_files WHERE id = 'latest_installer' LIMIT 1;`);
+      if (dbRes.rows.length > 0) {
+        const r = dbRes.rows[0];
+        // Cache to local disk for rapid subsequent downloads
+        const uploadDir = path.join(DATA_DIR, 'uploads');
+        if (!fs.existsSync(uploadDir)) {
+          try { fs.mkdirSync(uploadDir, { recursive: true }); } catch (e) {}
+        }
+        try {
+          fs.writeFileSync(binPath, r.file_data);
+          fs.writeFileSync(metaPath, JSON.stringify({
+            filename: r.filename,
+            mime_type: r.mime_type,
+            size_bytes: Number(r.size_bytes),
+            uploaded_at: new Date().toISOString()
+          }));
+        } catch (e) {}
+
+        res.setHeader('Content-Type', r.mime_type || 'application/octet-stream');
+        res.setHeader('Content-Length', r.size_bytes);
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(r.filename || 'NK-Helper-Setup.exe')}"`);
+        return res.send(r.file_data);
+      }
+    }
+
+    return res.status(404).send('ไม่พบไฟล์ตัวติดตั้งในฐานข้อมูล กรุณาอัปโหลดไฟล์ในระบบควบคุมก่อน');
+  } catch (err) {
+    console.error('Error downloading installer:', err);
+    return res.status(500).send('เกิดข้อผิดพลาดในการดาวน์โหลด: ' + err.message);
+  }
+});
+
 // 2. Heartbeat (NK Desktop reports its live status)
 app.post('/api/app-heartbeat', (req, res) => {
   try {
@@ -867,6 +936,127 @@ app.post('/api/admin/config', requireAuth, async (req, res) => {
     res.json({ ok: true, config: appConfig, message: 'บันทึกการตั้งค่าและส่งคำสั่งเรียลไทม์เรียบร้อยแล้ว' });
   } catch (err) {
     res.status(500).json({ ok: false, error: 'บันทึกไม่สำเร็จ: ' + err.message });
+  }
+});
+
+// Upload Installer (.exe) and store in PostgreSQL Database
+app.post('/api/admin/upload-installer', requireAuth, upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ ok: false, error: 'กรุณาเลือกไฟล์ตัวติดตั้งที่ต้องการอัปโหลด (.exe)' });
+    }
+
+    const originalname = file.originalname || 'NK-Helper-Setup.exe';
+    const mimeType = file.mimetype || 'application/octet-stream';
+    const sizeBytes = file.size;
+
+    // 1. Save to PostgreSQL BYTEA
+    if (dbPool) {
+      await dbPool.query(
+        `INSERT INTO app_files (id, filename, mime_type, size_bytes, file_data, uploaded_at)
+         VALUES ('latest_installer', $1, $2, $3, $4, NOW())
+         ON CONFLICT (id) DO UPDATE SET filename = $1, mime_type = $2, size_bytes = $3, file_data = $4, uploaded_at = NOW();`,
+        [originalname, mimeType, sizeBytes, file.buffer]
+      );
+      console.log(`✅ Stored installer "${originalname}" (${(sizeBytes / (1024 * 1024)).toFixed(2)} MB) into PostgreSQL.`);
+    }
+
+    // 2. Cache to local disk for fast streaming
+    const uploadDir = path.join(DATA_DIR, 'uploads');
+    if (!fs.existsSync(uploadDir)) {
+      try { fs.mkdirSync(uploadDir, { recursive: true }); } catch (e) {}
+    }
+    try {
+      fs.writeFileSync(path.join(uploadDir, 'latest_installer.bin'), file.buffer);
+      fs.writeFileSync(path.join(uploadDir, 'latest_installer.json'), JSON.stringify({
+        filename: originalname,
+        mime_type: mimeType,
+        size_bytes: sizeBytes,
+        uploaded_at: new Date().toISOString()
+      }));
+    } catch (e) {}
+
+    // 3. Construct permanent download URL
+    const host = req.get('host');
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const downloadUrl = `${protocol}://${host}/api/download/installer`;
+
+    // 4. Update configuration with new download URL
+    appConfig.version.downloadUrl = downloadUrl;
+    appConfig.updatedAt = new Date().toISOString();
+    appConfig.updatedBy = req.user.name || req.user.username;
+    await saveConfig(appConfig);
+
+    // 5. Broadcast to connected clients and admins
+    broadcastToDesktops({
+      type: 'CONFIG_CHANGED',
+      appEnabled: appConfig.appEnabled,
+      maintenance: appConfig.maintenance,
+      version: appConfig.version,
+      broadcast: appConfig.broadcast,
+      serverTime: Date.now()
+    });
+
+    broadcastToAdmins({
+      type: 'CONFIG_UPDATED',
+      config: appConfig,
+      serverTime: Date.now()
+    });
+
+    return res.json({
+      ok: true,
+      message: `อัปโหลดไฟล์ ${originalname} (${(sizeBytes / (1024 * 1024)).toFixed(2)} MB) และบันทึกเข้าฐานข้อมูลเรียบร้อยแล้ว!`,
+      filename: originalname,
+      sizeMb: (sizeBytes / (1024 * 1024)).toFixed(2),
+      downloadUrl,
+      config: appConfig
+    });
+  } catch (err) {
+    console.error('Error uploading installer:', err);
+    return res.status(500).json({ ok: false, error: 'เกิดข้อผิดพลาดในการอัปโหลด: ' + err.message });
+  }
+});
+
+// Check Installer File Info in Database
+app.get('/api/admin/installer-info', requireAuth, async (req, res) => {
+  try {
+    if (dbPool) {
+      const dbRes = await dbPool.query(`SELECT filename, mime_type, size_bytes, uploaded_at FROM app_files WHERE id = 'latest_installer' LIMIT 1;`);
+      if (dbRes.rows.length > 0) {
+        const r = dbRes.rows[0];
+        const host = req.get('host');
+        const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+        return res.json({
+          ok: true,
+          hasFile: true,
+          filename: r.filename,
+          sizeBytes: Number(r.size_bytes),
+          sizeMb: (Number(r.size_bytes) / (1024 * 1024)).toFixed(2),
+          downloadUrl: `${protocol}://${host}/api/download/installer`,
+          uploadedAt: r.uploaded_at
+        });
+      }
+    }
+    // Fallback to local cache json
+    const metaPath = path.join(DATA_DIR, 'uploads', 'latest_installer.json');
+    if (fs.existsSync(metaPath)) {
+      const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+      const host = req.get('host');
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+      return res.json({
+        ok: true,
+        hasFile: true,
+        filename: meta.filename,
+        sizeBytes: meta.size_bytes,
+        sizeMb: (meta.size_bytes / (1024 * 1024)).toFixed(2),
+        downloadUrl: `${protocol}://${host}/api/download/installer`,
+        uploadedAt: meta.uploaded_at
+      });
+    }
+    return res.json({ ok: true, hasFile: false });
+  } catch (err) {
+    return res.json({ ok: false, hasFile: false, error: err.message });
   }
 });
 

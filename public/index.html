@@ -345,9 +345,50 @@
                 </div>
 
                 <div class="form-group">
-                  <label for="downloadUrl">ลิงก์ดาวน์โหลดไฟล์ติดตั้ง (.exe Installer URL)</label>
-                  <input type="url" id="downloadUrl" placeholder="https://github.com/toyzaryo001/Nkdesktop/releases/download/v3.6.0/NK-Helper-Setup-3.6.0.exe">
-                  <small class="form-help">💡 สามารถใส่ลิงก์ GitHub Release, Google Drive, หรือ Direct Cloud Download ได้</small>
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                    <label for="downloadUrl" style="margin-bottom: 0;">ลิงก์ดาวน์โหลดไฟล์ติดตั้ง (.exe Installer URL)</label>
+                    <div>
+                      <input type="file" id="fileInstallerUpload" accept=".exe,.msi,.zip,.rar" style="display: none;">
+                      <button type="button" id="btnTriggerUpload" class="btn btn-outline" style="padding: 6px 14px; font-size: 0.85rem; border-color: #38ef7d; color: #38ef7d; border-radius: 8px; font-weight: 600;">
+                        <span>📤 อัปโหลดไฟล์เข้าฐานข้อมูล (.exe)</span>
+                      </button>
+                    </div>
+                  </div>
+                  <input type="url" id="downloadUrl" placeholder="https://web-production-eaa42d1.up.railway.app/api/download/installer">
+                  
+                  <!-- Live Upload Progress Bar -->
+                  <div id="uploadProgressContainer" class="hidden" style="margin-top: 10px; padding: 12px; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(56, 239, 125, 0.3); border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #cbd5e1; margin-bottom: 6px;">
+                      <span id="uploadProgressText">⏳ กำลังอัปโหลดไฟล์...</span>
+                      <span id="uploadProgressPercent" style="font-weight: 700; color: #38ef7d;">0%</span>
+                    </div>
+                    <div style="width: 100%; height: 8px; background: rgba(255, 255, 255, 0.1); border-radius: 4px; overflow: hidden;">
+                      <div id="uploadProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #11998e, #38ef7d); transition: width 0.15s ease;"></div>
+                    </div>
+                  </div>
+
+                  <!-- Database File Info Badge -->
+                  <div id="fileDatabaseBadge" class="hidden" style="margin-top: 10px; padding: 10px 14px; background: rgba(56, 239, 125, 0.08); border: 1px solid rgba(56, 239, 125, 0.3); border-radius: 8px; font-size: 0.85rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                      <span style="color: #38ef7d; font-size: 1.15rem;">💾</span>
+                      <div>
+                        <div style="font-weight: 600; color: #f8fafc;">
+                          <span>ไฟล์ในฐานข้อมูล: </span>
+                          <span id="lblDbFileName" style="color: #38ef7d;">-</span>
+                        </div>
+                        <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">
+                          <span>ขนาด: </span><span id="lblDbFileSize">-</span>
+                          <span style="margin: 0 4px;">•</span>
+                          <span>อัปโหลดเมื่อ: </span><span id="lblDbFileDate">-</span>
+                        </div>
+                      </div>
+                    </div>
+                    <a id="btnTestDownload" href="/api/download/installer" target="_blank" class="btn btn-outline" style="padding: 5px 12px; font-size: 0.8rem; text-decoration: none; border-radius: 6px;">
+                      <span>📥 ทดสอบดาวน์โหลด</span>
+                    </a>
+                  </div>
+
+                  <small class="form-help">💡 สามารถคลิกปุ่ม <b>"📤 อัปโหลดไฟล์เข้าฐานข้อมูล"</b> เพื่อนำไฟล์ .exe ไปบันทึกเก็บไว้ใน PostgreSQL หรือพิมพ์ลิงก์ดาวน์โหลดภายนอกได้</small>
                 </div>
 
                 <div class="form-group">

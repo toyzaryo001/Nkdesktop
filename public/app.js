@@ -65,6 +65,18 @@ const txtForceUpdateStatus = document.getElementById('txtForceUpdateStatus');
 const downloadUrl = document.getElementById('downloadUrl');
 const releaseNotes = document.getElementById('releaseNotes');
 
+// File Upload Elements
+const fileInstallerUpload = document.getElementById('fileInstallerUpload');
+const btnTriggerUpload = document.getElementById('btnTriggerUpload');
+const uploadProgressContainer = document.getElementById('uploadProgressContainer');
+const uploadProgressText = document.getElementById('uploadProgressText');
+const uploadProgressPercent = document.getElementById('uploadProgressPercent');
+const uploadProgressBar = document.getElementById('uploadProgressBar');
+const fileDatabaseBadge = document.getElementById('fileDatabaseBadge');
+const lblDbFileName = document.getElementById('lblDbFileName');
+const lblDbFileSize = document.getElementById('lblDbFileSize');
+const lblDbFileDate = document.getElementById('lblDbFileDate');
+
 // Inputs: Broadcast
 const chkBroadcastEnabled = document.getElementById('chkBroadcastEnabled');
 const txtBroadcastStatus = document.getElementById('txtBroadcastStatus');
@@ -339,6 +351,7 @@ function showDashboard() {
 
   loadConfig(true); // Initial load: force = true
   loadClients();
+  checkInstallerInfo();
   connectAdminWebSocket();
 
   // Restore any unsaved drafts if user refreshed the page while typing
@@ -859,6 +872,107 @@ if (changePasswordForm) {
       btn.innerHTML = '<span>🔑 บันทึกรหัสผ่านใหม่</span>';
     }
   });
+}
+
+// ==== INSTALLER FILE UPLOAD & DATABASE STORAGE ====
+async function checkInstallerInfo() {
+  try {
+    const res = await fetch('/api/admin/installer-info');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.ok && data.hasFile) {
+        if (fileDatabaseBadge) fileDatabaseBadge.classList.remove('hidden');
+        if (lblDbFileName) lblDbFileName.textContent = data.filename;
+        if (lblDbFileSize) lblDbFileSize.textContent = `${data.sizeMb} MB`;
+        if (lblDbFileDate && data.uploadedAt) {
+          const d = new Date(data.uploadedAt);
+          lblDbFileDate.textContent = d.toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' });
+        }
+      } else {
+        if (fileDatabaseBadge) fileDatabaseBadge.classList.add('hidden');
+      }
+    }
+  } catch (err) {}
+}
+
+if (btnTriggerUpload && fileInstallerUpload) {
+  btnTriggerUpload.addEventListener('click', () => {
+    fileInstallerUpload.click();
+  });
+
+  fileInstallerUpload.addEventListener('change', () => {
+    const file = fileInstallerUpload.files?.[0];
+    if (!file) return;
+
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+    const ok = confirm(`ต้องการอัปโหลดไฟล์ "${file.name}" (${sizeMb} MB) ไปบันทึกเก็บไว้ในฐานข้อมูล PostgreSQL หรือไม่?`);
+    if (!ok) {
+      fileInstallerUpload.value = '';
+      return;
+    }
+
+    uploadInstallerFile(file);
+  });
+}
+
+function uploadInstallerFile(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  if (btnTriggerUpload) btnTriggerUpload.disabled = true;
+  if (uploadProgressContainer) uploadProgressContainer.classList.remove('hidden');
+  if (uploadProgressBar) uploadProgressBar.style.width = '0%';
+  if (uploadProgressPercent) uploadProgressPercent.textContent = '0%';
+  if (uploadProgressText) uploadProgressText.textContent = `⏳ กำลังอัปโหลด ${file.name}...`;
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/admin/upload-installer', true);
+
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) {
+      const percent = Math.round((e.loaded / e.total) * 100);
+      if (uploadProgressBar) uploadProgressBar.style.width = percent + '%';
+      if (uploadProgressPercent) uploadProgressPercent.textContent = percent + '%';
+      if (uploadProgressText) uploadProgressText.textContent = `⏳ กำลังบันทึกไฟล์เข้าฐานข้อมูล PostgreSQL... ${percent}%`;
+    }
+  };
+
+  xhr.onload = () => {
+    if (btnTriggerUpload) btnTriggerUpload.disabled = false;
+    fileInstallerUpload.value = '';
+    setTimeout(() => {
+      if (uploadProgressContainer) uploadProgressContainer.classList.add('hidden');
+    }, 2500);
+
+    try {
+      const data = JSON.parse(xhr.responseText);
+      if (xhr.status === 200 && data.ok) {
+        showToast(data.message || 'อัปโหลดและบันทึกลงฐานข้อมูลสำเร็จ!');
+        if (downloadUrl && data.downloadUrl) {
+          downloadUrl.value = data.downloadUrl;
+        }
+        if (data.config) {
+          currentConfig = data.config;
+          clearFormDraft();
+          renderConfig(currentConfig, true);
+        }
+        checkInstallerInfo();
+      } else {
+        showToast(data.error || 'อัปโหลดไม่สำเร็จ', 'error');
+      }
+    } catch (err) {
+      showToast('เกิดข้อผิดพลาดในการประมวลผลคำตอบจากเซิร์ฟเวอร์', 'error');
+    }
+  };
+
+  xhr.onerror = () => {
+    if (btnTriggerUpload) btnTriggerUpload.disabled = false;
+    if (uploadProgressContainer) uploadProgressContainer.classList.add('hidden');
+    fileInstallerUpload.value = '';
+    showToast('การเชื่อมต่อล้มเหลวระหว่างอัปโหลด กรุณาลองใหม่อีกครั้ง', 'error');
+  };
+
+  xhr.send(formData);
 }
 
 // Initial Launch
