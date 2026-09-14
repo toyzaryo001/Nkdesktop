@@ -610,10 +610,12 @@ function updateMaintenanceSimulation() {
 
 function updateBroadcastSimulation() {
   const type = broadcastType?.value || 'info';
-  const msg = broadcastMessage?.value?.trim() || 'พิมพ์ข้อความเพื่อดูตัวอย่างแถบประกาศ';
-  if (simBroadcastBar) {
-    simBroadcastBar.className = `sim-broadcast-bar sim-${type}`;
-    simBroadcastBar.textContent = `📢 ประกาศ: ${msg}`;
+  const msg = broadcastMessage?.value?.trim() || 'ตัวอย่างข้อความประกาศจะแสดงขึ้นที่นี่...';
+  if (simBroadcastBanner) {
+    simBroadcastBanner.className = `sim-banner ${type}`;
+  }
+  if (simBroadcastText) {
+    simBroadcastText.textContent = msg;
   }
 }
 
