@@ -81,6 +81,9 @@ let currentConfig = null;
 let cachedClients = [];
 let adminWs = null;
 let wsReconnectTimer = null;
+let wsPingTimer = null;
+const DRAFT_KEY = 'nk_admin_form_draft_v1';
+let hasUnsavedEdits = false;
 
 const VIEW_METADATA = {
   overview: {
@@ -214,6 +217,10 @@ function connectAdminWebSocket() {
   if (adminWs) {
     try { adminWs.close(); } catch (e) {}
   }
+  if (wsPingTimer) {
+    clearInterval(wsPingTimer);
+    wsPingTimer = null;
+  }
 
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsUrl = `${protocol}//${window.location.host}/ws/admin`;
@@ -224,15 +231,30 @@ function connectAdminWebSocket() {
     adminWs.onopen = () => {
       if (wsIndicatorDot) wsIndicatorDot.className = 'ws-dot online';
       if (wsIndicatorText) wsIndicatorText.textContent = '⚡ Realtime: เชื่อมต่อแล้ว';
+
+      // Keepalive heartbeat ping every 15s to keep Railway proxy alive
+      if (wsPingTimer) clearInterval(wsPingTimer);
+      wsPingTimer = setInterval(() => {
+        if (adminWs && adminWs.readyState === WebSocket.OPEN) {
+          try { adminWs.send(JSON.stringify({ type: 'PING' })); } catch (e) {}
+        }
+      }, 15000);
     };
 
     adminWs.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
+        if (msg.type === 'PONG') {
+          return; // Keepalive ack
+        }
+        if (msg.type === 'PING') {
+          try { adminWs.send(JSON.stringify({ type: 'PONG' })); } catch (e) {}
+          return;
+        }
         if (msg.type === 'INIT') {
           if (msg.config) {
             currentConfig = msg.config;
-            renderConfig(currentConfig);
+            renderConfig(currentConfig, false); // false = do NOT overwrite what user is typing!
           }
           if (msg.clients) {
             cachedClients = msg.clients;
@@ -243,7 +265,7 @@ function connectAdminWebSocket() {
           renderClientsTable(cachedClients, msg.totalOnline || 0);
         } else if (msg.type === 'CONFIG_UPDATED') {
           currentConfig = msg.config;
-          renderConfig(currentConfig);
+          renderConfig(currentConfig, false);
         }
       } catch (err) {
         console.error('Error parsing admin ws message:', err);
@@ -251,19 +273,31 @@ function connectAdminWebSocket() {
     };
 
     adminWs.onclose = () => {
+      if (wsPingTimer) {
+        clearInterval(wsPingTimer);
+        wsPingTimer = null;
+      }
       if (wsIndicatorDot) wsIndicatorDot.className = 'ws-dot offline';
       if (wsIndicatorText) wsIndicatorText.textContent = '❌ กำลังเชื่อมต่อใหม่...';
       clearTimeout(wsReconnectTimer);
-      wsReconnectTimer = setTimeout(connectAdminWebSocket, 3000);
+      wsReconnectTimer = setTimeout(connectAdminWebSocket, 2500);
     };
 
     adminWs.onerror = () => {
+      if (wsPingTimer) {
+        clearInterval(wsPingTimer);
+        wsPingTimer = null;
+      }
       if (wsIndicatorDot) wsIndicatorDot.className = 'ws-dot offline';
       if (wsIndicatorText) wsIndicatorText.textContent = '❌ ออฟไลน์';
     };
   } catch (e) {
+    if (wsPingTimer) {
+      clearInterval(wsPingTimer);
+      wsPingTimer = null;
+    }
     clearTimeout(wsReconnectTimer);
-    wsReconnectTimer = setTimeout(connectAdminWebSocket, 3000);
+    wsReconnectTimer = setTimeout(connectAdminWebSocket, 2500);
   }
 }
 
@@ -286,6 +320,10 @@ async function checkAuth() {
 function showLogin() {
   loginScreen.classList.remove('hidden');
   dashboardScreen.classList.add('hidden');
+  if (wsPingTimer) {
+    clearInterval(wsPingTimer);
+    wsPingTimer = null;
+  }
   if (adminWs) {
     try { adminWs.close(); } catch (e) {}
   }
@@ -299,9 +337,16 @@ function showDashboard() {
     navUserName.textContent = currentUser.username || currentUser.name || 'admin';
   }
 
-  loadConfig();
+  loadConfig(true); // Initial load: force = true
   loadClients();
   connectAdminWebSocket();
+
+  // Restore any unsaved drafts if user refreshed the page while typing
+  setTimeout(() => {
+    if (restoreFormDraft()) {
+      showToast('กู้คืนข้อความที่คุณพิมพ์ค้างไว้ให้เรียบร้อยแล้ว', 'info');
+    }
+  }, 150);
 }
 
 // Login Form Submit
@@ -358,48 +403,142 @@ if (btnLogout) {
 }
 
 // ==== CONFIG & FORM SYNC ====
-async function loadConfig() {
+async function loadConfig(force = false) {
   try {
     const res = await fetch('/api/admin/config');
     const data = await res.json();
     if (res.ok && data.ok) {
       currentConfig = data.config;
-      renderConfig(currentConfig);
+      renderConfig(currentConfig, force);
     }
   } catch (err) {
     console.error('Error loading config:', err);
   }
 }
 
-function renderConfig(cfg) {
+function setInputSafe(el, val, force) {
+  if (!el) return;
+  const newVal = val !== undefined && val !== null ? String(val) : '';
+  if (force) {
+    el.value = newVal;
+    return;
+  }
+  // If user is currently typing/focused in this element, NEVER overwrite!
+  if (document.activeElement === el) return;
+  // If user has unsaved edits in progress, do not overwrite with old server value!
+  if (hasUnsavedEdits && el.value.trim() !== '') return;
+  el.value = newVal;
+}
+
+function setCheckboxSafe(el, checked, force) {
+  if (!el) return;
+  if (force) {
+    el.checked = Boolean(checked);
+    return;
+  }
+  if (document.activeElement === el) return;
+  if (hasUnsavedEdits) return;
+  el.checked = Boolean(checked);
+}
+
+function saveFormDraft() {
+  hasUnsavedEdits = true;
+  const draft = {
+    maintenanceTitle: maintenanceTitle?.value || '',
+    maintenanceContact: maintenanceContact?.value || '',
+    maintenanceMessage: maintenanceMessage?.value || '',
+    latestVersion: latestVersion?.value || '',
+    minSupportedVersion: minSupportedVersion?.value || '',
+    chkForceUpdate: Boolean(chkForceUpdate?.checked),
+    downloadUrl: downloadUrl?.value || '',
+    releaseNotes: releaseNotes?.value || '',
+    chkBroadcastEnabled: Boolean(chkBroadcastEnabled?.checked),
+    broadcastType: broadcastType?.value || 'info',
+    broadcastMessage: broadcastMessage?.value || '',
+    time: Date.now()
+  };
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  } catch (e) {}
+}
+
+function restoreFormDraft() {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return false;
+    const draft = JSON.parse(raw);
+    if (!draft) return false;
+
+    let restored = false;
+    if (draft.downloadUrl && downloadUrl) { downloadUrl.value = draft.downloadUrl; restored = true; }
+    if (draft.releaseNotes && releaseNotes) { releaseNotes.value = draft.releaseNotes; restored = true; }
+    if (draft.latestVersion && latestVersion) { latestVersion.value = draft.latestVersion; restored = true; }
+    if (draft.minSupportedVersion && minSupportedVersion) { minSupportedVersion.value = draft.minSupportedVersion; restored = true; }
+    if (draft.chkForceUpdate !== undefined && chkForceUpdate) {
+      chkForceUpdate.checked = draft.chkForceUpdate;
+      updateForceUpdateUI(draft.chkForceUpdate);
+    }
+    if (draft.maintenanceTitle && maintenanceTitle) { maintenanceTitle.value = draft.maintenanceTitle; restored = true; }
+    if (draft.maintenanceContact && maintenanceContact) { maintenanceContact.value = draft.maintenanceContact; restored = true; }
+    if (draft.maintenanceMessage && maintenanceMessage) { maintenanceMessage.value = draft.maintenanceMessage; restored = true; }
+    if (draft.chkBroadcastEnabled !== undefined && chkBroadcastEnabled) {
+      chkBroadcastEnabled.checked = draft.chkBroadcastEnabled;
+      updateBroadcastUI(draft.chkBroadcastEnabled);
+    }
+    if (draft.broadcastType && broadcastType) broadcastType.value = draft.broadcastType;
+    if (draft.broadcastMessage && broadcastMessage) { broadcastMessage.value = draft.broadcastMessage; restored = true; }
+
+    updateMaintenanceSimulation();
+    updateBroadcastSimulation();
+    if (restored) hasUnsavedEdits = true;
+    return restored;
+  } catch (e) {
+    return false;
+  }
+}
+
+function clearFormDraft() {
+  hasUnsavedEdits = false;
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch (e) {}
+}
+
+function renderConfig(cfg, force = false) {
   if (!cfg) return;
 
   // App Enabled
   const enabled = Boolean(cfg.appEnabled);
-  if (chkAppEnabled) chkAppEnabled.checked = enabled;
-  if (chkAppEnabledQuick) chkAppEnabledQuick.checked = enabled;
+  setCheckboxSafe(chkAppEnabled, enabled, force);
+  setCheckboxSafe(chkAppEnabledQuick, enabled, force);
   updateAppEnabledUI(enabled);
 
   // Maintenance
-  if (maintenanceTitle) maintenanceTitle.value = cfg.maintenance?.title || '';
-  if (maintenanceContact) maintenanceContact.value = cfg.maintenance?.contact || '';
-  if (maintenanceMessage) maintenanceMessage.value = cfg.maintenance?.message || '';
-  updateMaintenanceSimulation();
+  setInputSafe(maintenanceTitle, cfg.maintenance?.title || '', force);
+  setInputSafe(maintenanceContact, cfg.maintenance?.contact || '', force);
+  setInputSafe(maintenanceMessage, cfg.maintenance?.message || '', force);
+  if (force || (document.activeElement !== maintenanceTitle && document.activeElement !== maintenanceMessage)) {
+    updateMaintenanceSimulation();
+  }
 
   // Version
-  if (latestVersion) latestVersion.value = cfg.version?.latestVersion || '3.6.0';
-  if (minSupportedVersion) minSupportedVersion.value = cfg.version?.minSupportedVersion || '3.5.0';
-  if (chkForceUpdate) chkForceUpdate.checked = Boolean(cfg.version?.forceUpdate);
-  updateForceUpdateUI(cfg.version?.forceUpdate);
-  if (downloadUrl) downloadUrl.value = cfg.version?.downloadUrl || '';
-  if (releaseNotes) releaseNotes.value = cfg.version?.releaseNotes || '';
+  setInputSafe(latestVersion, cfg.version?.latestVersion || '3.6.0', force);
+  setInputSafe(minSupportedVersion, cfg.version?.minSupportedVersion || '3.5.0', force);
+  setCheckboxSafe(chkForceUpdate, cfg.version?.forceUpdate, force);
+  updateForceUpdateUI(chkForceUpdate ? chkForceUpdate.checked : cfg.version?.forceUpdate);
+  setInputSafe(downloadUrl, cfg.version?.downloadUrl || '', force);
+  setInputSafe(releaseNotes, cfg.version?.releaseNotes || '', force);
 
   // Broadcast
-  if (chkBroadcastEnabled) chkBroadcastEnabled.checked = Boolean(cfg.broadcast?.enabled);
-  updateBroadcastUI(cfg.broadcast?.enabled);
-  if (broadcastType) broadcastType.value = cfg.broadcast?.type || 'info';
-  if (broadcastMessage) broadcastMessage.value = cfg.broadcast?.message || '';
-  updateBroadcastSimulation();
+  setCheckboxSafe(chkBroadcastEnabled, cfg.broadcast?.enabled, force);
+  updateBroadcastUI(chkBroadcastEnabled ? chkBroadcastEnabled.checked : cfg.broadcast?.enabled);
+  if (force || (broadcastType && document.activeElement !== broadcastType && !hasUnsavedEdits)) {
+    if (broadcastType) broadcastType.value = cfg.broadcast?.type || 'info';
+  }
+  setInputSafe(broadcastMessage, cfg.broadcast?.message || '', force);
+  if (force || document.activeElement !== broadcastMessage) {
+    updateBroadcastSimulation();
+  }
 
   // Quick Stats
   if (statLatestVersion) {
@@ -458,19 +597,20 @@ function updateMaintenanceSimulation() {
 
 function updateBroadcastSimulation() {
   const type = broadcastType?.value || 'info';
-  const msg = broadcastMessage?.value?.trim() || 'ตัวอย่างข้อความประกาศจะแสดงขึ้นที่นี่...';
-  if (simBroadcastBanner) simBroadcastBanner.className = `sim-banner ${type}`;
-  if (simBroadcastText) simBroadcastText.textContent = msg;
+  const msg = broadcastMessage?.value?.trim() || 'พิมพ์ข้อความเพื่อดูตัวอย่างแถบประกาศ';
+  if (simBroadcastBar) {
+    simBroadcastBar.className = `sim-broadcast-bar sim-${type}`;
+    simBroadcastBar.textContent = `📢 ประกาศ: ${msg}`;
+  }
 }
 
 // Real-time Input Listeners
-[maintenanceTitle, maintenanceContact, maintenanceMessage].forEach(el => {
-  el?.addEventListener('input', updateMaintenanceSimulation);
-});
+maintenanceTitle?.addEventListener('input', updateMaintenanceSimulation);
+maintenanceContact?.addEventListener('input', updateMaintenanceSimulation);
+maintenanceMessage?.addEventListener('input', updateMaintenanceSimulation);
 
-[broadcastType, broadcastMessage].forEach(el => {
-  el?.addEventListener('input', updateBroadcastSimulation);
-});
+broadcastType?.addEventListener('change', updateBroadcastSimulation);
+broadcastMessage?.addEventListener('input', updateBroadcastSimulation);
 
 // Sync toggles between views
 chkAppEnabled?.addEventListener('change', () => {
@@ -493,8 +633,8 @@ chkBroadcastEnabled?.addEventListener('change', () => {
 
 // ==== SAVE CONFIGURATION ====
 async function saveConfig() {
-  const saveBtn = btnSaveConfig;
-  if (saveBtn) saveBtn.disabled = true;
+  const allSaveBtns = [btnSaveConfig, btnSaveControl, btnSaveVersion, btnSaveBroadcast].filter(Boolean);
+  allSaveBtns.forEach(btn => btn.disabled = true);
 
   const payload = {
     appEnabled: chkAppEnabled ? chkAppEnabled.checked : true,
@@ -527,7 +667,8 @@ async function saveConfig() {
     const data = await res.json();
     if (res.ok && data.ok) {
       currentConfig = data.config;
-      renderConfig(currentConfig);
+      clearFormDraft();
+      renderConfig(currentConfig, true); // Force UI update to newly saved config
       showToast('บันทึกคำสั่งและส่งผล Real-time ไปยังทุกเครื่องเรียบร้อยแล้ว!');
     } else {
       showToast(data.error || 'บันทึกไม่สำเร็จ', 'error');
@@ -535,9 +676,22 @@ async function saveConfig() {
   } catch (err) {
     showToast('เกิดข้อผิดพลาดในการบันทึก: ' + err.message, 'error');
   } finally {
-    if (saveBtn) saveBtn.disabled = false;
+    allSaveBtns.forEach(btn => btn.disabled = false);
   }
 }
+
+// Auto-save form draft whenever user types so inputs are NEVER lost
+[
+  maintenanceTitle, maintenanceContact, maintenanceMessage,
+  latestVersion, minSupportedVersion, downloadUrl, releaseNotes,
+  broadcastMessage
+].forEach(el => {
+  el?.addEventListener('input', saveFormDraft);
+});
+
+[chkAppEnabled, chkAppEnabledQuick, chkForceUpdate, chkBroadcastEnabled, broadcastType].forEach(el => {
+  el?.addEventListener('change', saveFormDraft);
+});
 
 [btnSaveConfig, btnSaveControl, btnSaveVersion, btnSaveBroadcast].forEach(btn => {
   btn?.addEventListener('click', saveConfig);
@@ -558,7 +712,7 @@ async function triggerEmergencyKickAll() {
     if (res.ok && data.ok) {
       if (data.config) {
         currentConfig = data.config;
-        renderConfig(currentConfig);
+        renderConfig(currentConfig, true);
       }
       showToast('🚨 สั่งดีดผู้ใช้ทุกคนออกจากระบบและล็อกหน้าจอเรียบร้อยแล้ว!');
     } else {

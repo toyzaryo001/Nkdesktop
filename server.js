@@ -196,7 +196,7 @@ async function saveConfig(cfg) {
       await dbPool.query(
         `INSERT INTO system_config (key, value, updated_at) VALUES ('app_config', $1, NOW())
          ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW();`,
-        [cfg]
+        [JSON.stringify(cfg)]
       );
     } catch (err) {
       console.error('Error saving config to PostgreSQL:', err.message);
@@ -257,13 +257,17 @@ async function initDatabase() {
       // Load config from DB if exists
       const configRes = await client.query(`SELECT value FROM system_config WHERE key = 'app_config' LIMIT 1;`);
       if (configRes.rows.length > 0 && configRes.rows[0].value) {
-        appConfig = { ...DEFAULT_CONFIG, ...configRes.rows[0].value };
+        let loaded = configRes.rows[0].value;
+        if (typeof loaded === 'string') {
+          try { loaded = JSON.parse(loaded); } catch (e) {}
+        }
+        appConfig = { ...DEFAULT_CONFIG, ...loaded };
         saveConfigFile(appConfig);
         console.log('✅ Synchronized latest app_config from PostgreSQL.');
       } else {
         await client.query(
           `INSERT INTO system_config (key, value, updated_at) VALUES ('app_config', $1, NOW()) ON CONFLICT (key) DO NOTHING;`,
-          [appConfig]
+          [JSON.stringify(appConfig)]
         );
         console.log('✅ Seeded initial app_config into PostgreSQL.');
       }
@@ -390,6 +394,15 @@ wss.on('connection', (ws, req) => {
       totalOnline: clientData.totalOnline,
       serverTime: Date.now()
     }));
+
+    ws.on('message', (raw) => {
+      try {
+        const data = JSON.parse(raw.toString());
+        if (data.type === 'PING') {
+          ws.send(JSON.stringify({ type: 'PONG', serverTime: Date.now() }));
+        }
+      } catch (err) {}
+    });
 
     ws.on('close', () => {
       adminSockets.delete(ws);
@@ -518,6 +531,23 @@ setInterval(() => {
     broadcastClientsUpdateToAdmins();
   }
 }, 10 * 1000);
+
+// Active Keep-Alive Ping (every 20s) to prevent cloud/Railway proxy WebSocket timeouts
+setInterval(() => {
+  const pingFrame = JSON.stringify({ type: 'PING', serverTime: Date.now() });
+  for (const ws of adminSockets) {
+    if (ws.readyState === WebSocket.OPEN) {
+      try { ws.send(pingFrame); } catch (e) {}
+    } else {
+      adminSockets.delete(ws);
+    }
+  }
+  for (const [ws] of desktopSockets.entries()) {
+    if (ws.readyState === WebSocket.OPEN) {
+      try { ws.send(pingFrame); } catch (e) {}
+    }
+  }
+}, 20 * 1000);
 
 // Middlewares
 app.use(cors({
