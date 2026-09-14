@@ -587,26 +587,29 @@ txtSearchClients?.addEventListener('input', () => {
 });
 
 function renderClientsTable(clients = cachedClients, totalOnline = null) {
-  const activeCount = totalOnline !== null ? totalOnline : clients.filter(c => c.status === 'online').length;
+  // STRICT FILTER: Only show clients that are currently online!
+  const onlineClients = (clients || []).filter(c => c.status === 'online');
+
+  const activeCount = onlineClients.length;
   if (statActiveClients) statActiveClients.textContent = `${activeCount} เครื่อง`;
   if (badgeClientCount) badgeClientCount.textContent = `${activeCount}`;
 
   const query = txtSearchClients?.value?.trim().toLowerCase() || '';
   const filtered = query
-    ? clients.filter(c => 
+    ? onlineClients.filter(c => 
         (c.username && c.username.toLowerCase().includes(query)) ||
         (c.siteName && c.siteName.toLowerCase().includes(query)) ||
         (c.deviceUuid && c.deviceUuid.toLowerCase().includes(query)) ||
         (c.hostname && c.hostname.toLowerCase().includes(query)) ||
         (c.ip && c.ip.toLowerCase().includes(query))
       )
-    : clients;
+    : onlineClients;
 
   if (filtered.length === 0) {
     clientsTableBody.innerHTML = `
       <tr>
         <td colspan="9" class="text-center py-4 text-muted" style="text-align: center; padding: 36px;">
-          ${query ? 'ไม่พบเครื่อง Desktop ที่ตรงกับคำค้นหา' : 'ยังไม่มีเครื่อง Desktop เปิดใช้งานในขณะนี้'}
+          ${query ? 'ไม่พบเครื่อง Desktop ที่ตรงกับคำค้นหา' : 'ยังไม่มีเครื่อง Desktop ออนไลน์ในขณะนี้'}
         </td>
       </tr>
     `;

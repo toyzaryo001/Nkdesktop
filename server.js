@@ -162,19 +162,35 @@ function broadcastToAdmins(payload) {
 function getClientsData() {
   const now = Date.now();
   const list = [];
-  for (const client of activeClients.values()) {
+  for (const [clientId, client] of activeClients.entries()) {
     const diffSec = Math.floor((now - client.lastSeen) / 1000);
-    const status = diffSec <= 180 ? 'online' : (diffSec <= 360 ? 'idle' : 'offline');
-    list.push({
-      ...client,
-      diffSec,
-      status
-    });
+
+    // Verify if an active WebSocket connection exists for this client
+    let hasActiveWs = false;
+    for (const [ws, data] of desktopSockets.entries()) {
+      if (data.boundClientId === clientId && ws.readyState === WebSocket.OPEN) {
+        hasActiveWs = true;
+        break;
+      }
+    }
+
+    // Strictly online only: Active WebSocket or heartbeat within 40 seconds
+    const isOnline = hasActiveWs || diffSec <= 40;
+    if (isOnline) {
+      list.push({
+        ...client,
+        diffSec,
+        status: 'online'
+      });
+    } else {
+      // Evict immediately if not online
+      activeClients.delete(clientId);
+    }
   }
   list.sort((a, b) => b.lastSeen - a.lastSeen);
   return {
     clients: list,
-    totalOnline: list.filter(c => c.status === 'online').length
+    totalOnline: list.length
   };
 }
 
@@ -269,17 +285,43 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('close', () => {
+    const data = desktopSockets.get(ws);
     desktopSockets.delete(ws);
+    if (data && data.boundClientId) {
+      let otherWsOpen = false;
+      for (const [s, d] of desktopSockets.entries()) {
+        if (d.boundClientId === data.boundClientId && s.readyState === WebSocket.OPEN) {
+          otherWsOpen = true;
+          break;
+        }
+      }
+      if (!otherWsOpen) {
+        activeClients.delete(data.boundClientId);
+      }
+    }
     broadcastClientsUpdateToAdmins();
   });
 
   ws.on('error', () => {
+    const data = desktopSockets.get(ws);
     desktopSockets.delete(ws);
+    if (data && data.boundClientId) {
+      let otherWsOpen = false;
+      for (const [s, d] of desktopSockets.entries()) {
+        if (d.boundClientId === data.boundClientId && s.readyState === WebSocket.OPEN) {
+          otherWsOpen = true;
+          break;
+        }
+      }
+      if (!otherWsOpen) {
+        activeClients.delete(data.boundClientId);
+      }
+    }
     broadcastClientsUpdateToAdmins();
   });
 });
 
-// Clean up stale sessions and clients every 60s
+// Clean up stale sessions and clients every 10s
 setInterval(() => {
   const now = Date.now();
   for (const [token, sess] of sessions.entries()) {
@@ -287,13 +329,24 @@ setInterval(() => {
       sessions.delete(token);
     }
   }
+  let changed = false;
   for (const [clientId, client] of activeClients.entries()) {
-    if (now - client.lastSeen > 10 * 60 * 1000) {
+    let hasActiveWs = false;
+    for (const [ws, data] of desktopSockets.entries()) {
+      if (data.boundClientId === clientId && ws.readyState === WebSocket.OPEN) {
+        hasActiveWs = true;
+        break;
+      }
+    }
+    if (!hasActiveWs && (now - client.lastSeen > 40 * 1000)) {
       activeClients.delete(clientId);
+      changed = true;
     }
   }
-  broadcastClientsUpdateToAdmins();
-}, 60 * 1000);
+  if (changed) {
+    broadcastClientsUpdateToAdmins();
+  }
+}, 10 * 1000);
 
 // Middlewares
 app.use(cors({
