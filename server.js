@@ -109,11 +109,19 @@ async function saveAdminAuth(authData) {
   saveAdminAuthFile(authData);
   if (dbPool) {
     try {
+      // 1. Primary: Save in system_config with unique key = 'admin_auth'
+      await dbPool.query(
+        `INSERT INTO system_config (key, value, updated_at) VALUES ('admin_auth', $1, NOW())
+         ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW();`,
+        [JSON.stringify(authData)]
+      );
+      // 2. Clean legacy table so old username is removed and only current username exists
+      await dbPool.query(`DELETE FROM admin_auth WHERE username <> $1;`, [authData.username]).catch(() => {});
       await dbPool.query(
         `INSERT INTO admin_auth (username, salt, password_hash, updated_at) VALUES ($1, $2, $3, NOW())
          ON CONFLICT (username) DO UPDATE SET salt = $2, password_hash = $3, updated_at = NOW();`,
         [authData.username, authData.salt, authData.passwordHash]
-      );
+      ).catch(() => {});
     } catch (err) {
       console.error('Error saving admin auth to PostgreSQL:', err.message);
     }
@@ -272,23 +280,55 @@ async function initDatabase() {
         console.log('✅ Seeded initial app_config into PostgreSQL.');
       }
 
-      // Load auth from DB if exists
-      const authRes = await client.query(`SELECT username, salt, password_hash, updated_at FROM admin_auth WHERE username = $1 LIMIT 1;`, [adminAuth.username]);
-      if (authRes.rows.length > 0) {
-        adminAuth = {
-          username: authRes.rows[0].username,
-          salt: authRes.rows[0].salt,
-          passwordHash: authRes.rows[0].password_hash,
-          updatedAt: authRes.rows[0].updated_at
-        };
-        saveAdminAuthFile(adminAuth);
-        console.log('✅ Synchronized latest admin_auth from PostgreSQL.');
-      } else {
+      // Load master admin auth from DB (Check system_config first, then fallback to most recent admin_auth)
+      let authLoaded = false;
+      const authConfigRes = await client.query(`SELECT value FROM system_config WHERE key = 'admin_auth' LIMIT 1;`);
+      if (authConfigRes.rows.length > 0 && authConfigRes.rows[0].value) {
+        let loadedAuth = authConfigRes.rows[0].value;
+        if (typeof loadedAuth === 'string') {
+          try { loadedAuth = JSON.parse(loadedAuth); } catch (e) {}
+        }
+        if (loadedAuth && loadedAuth.username && loadedAuth.passwordHash && loadedAuth.salt) {
+          adminAuth = loadedAuth;
+          saveAdminAuthFile(adminAuth);
+          authLoaded = true;
+          console.log(`✅ Synchronized latest admin_auth (${adminAuth.username}) from PostgreSQL.`);
+        }
+      }
+
+      if (!authLoaded) {
+        // Migration check: If existing rows exist in legacy admin_auth table, pick the latest updated one!
+        const legacyRes = await client.query(`SELECT username, salt, password_hash, updated_at FROM admin_auth ORDER BY updated_at DESC LIMIT 1;`).catch(() => ({ rows: [] }));
+        if (legacyRes.rows.length > 0) {
+          const r = legacyRes.rows[0];
+          adminAuth = {
+            username: r.username,
+            salt: r.salt,
+            passwordHash: r.password_hash,
+            updatedAt: r.updated_at
+          };
+          saveAdminAuthFile(adminAuth);
+          await client.query(
+            `INSERT INTO system_config (key, value, updated_at) VALUES ('admin_auth', $1, NOW())
+             ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW();`,
+            [JSON.stringify(adminAuth)]
+          );
+          authLoaded = true;
+          console.log(`✅ Migrated latest admin_auth (${adminAuth.username}) from legacy table to PostgreSQL.`);
+        }
+      }
+
+      if (!authLoaded) {
+        // Seed default initial auth if DB is completely empty
+        await client.query(
+          `INSERT INTO system_config (key, value, updated_at) VALUES ('admin_auth', $1, NOW()) ON CONFLICT (key) DO NOTHING;`,
+          [JSON.stringify(adminAuth)]
+        );
         await client.query(
           `INSERT INTO admin_auth (username, salt, password_hash, updated_at) VALUES ($1, $2, $3, NOW()) ON CONFLICT (username) DO NOTHING;`,
           [adminAuth.username, adminAuth.salt, adminAuth.passwordHash]
-        );
-        console.log('✅ Seeded initial admin_auth into PostgreSQL.');
+        ).catch(() => {});
+        console.log(`✅ Seeded initial admin_auth (${adminAuth.username}) into PostgreSQL.`);
       }
     } finally {
       client.release();
@@ -734,6 +774,13 @@ app.post('/api/admin/change-password', requireAuth, async (req, res) => {
 
     await saveAdminAuth(adminAuth);
 
+    const token = getAuthToken(req);
+    if (token && sessions.has(token)) {
+      const sess = sessions.get(token);
+      sess.user.username = adminAuth.username;
+      sess.user.name = adminAuth.username;
+    }
+
     return res.json({
       ok: true,
       message: 'เปลี่ยนรหัสผ่านผู้ควบคุมสำเร็จเรียบร้อยแล้ว',
@@ -867,13 +914,17 @@ app.get('*', (req, res) => {
 });
 
 // Start Server (with WebSocket Support)
-server.listen(PORT, async () => {
+async function startServer() {
   await initDatabase();
-  console.log(`=============================================`);
-  console.log(`🚀 NK Master Admin Server running on port ${PORT}`);
-  console.log(`📍 Web Dashboard: http://localhost:${PORT}`);
-  console.log(`🔑 Master User:   ${adminAuth.username}`);
-  console.log(`🔌 Desktop API:   http://localhost:${PORT}/api/app-control`);
-  console.log(`⚡ WebSocket URL: ws://localhost:${PORT}/ws/client`);
-  console.log(`=============================================`);
-});
+  server.listen(PORT, () => {
+    console.log(`=============================================`);
+    console.log(`🚀 NK Master Admin Server running on port ${PORT}`);
+    console.log(`📍 Web Dashboard: http://localhost:${PORT}`);
+    console.log(`🔑 Master User:   ${adminAuth.username}`);
+    console.log(`🔌 Desktop API:   http://localhost:${PORT}/api/app-control`);
+    console.log(`⚡ WebSocket URL: ws://localhost:${PORT}/ws/client`);
+    console.log(`=============================================`);
+  });
+}
+
+startServer();
