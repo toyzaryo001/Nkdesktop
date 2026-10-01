@@ -700,16 +700,8 @@ app.post('/api/app-forms', async (req, res) => {
     appConfig.formTemplates = forms;
     appConfig.updatedAt = new Date().toISOString();
     
-    // Save to DB (Fire and forget, but wait for DB)
-    try {
-      await dbPool.query(
-        `INSERT INTO system_config (id, config_data) VALUES ('global_config', $1) 
-         ON CONFLICT (id) DO UPDATE SET config_data = $1;`,
-        [JSON.stringify(appConfig)]
-      );
-    } catch (e) {
-      console.error('Error saving forms to DB:', e);
-    }
+    // Save to DB and Disk
+    saveConfig(appConfig).catch(e => console.error('Error saving forms to DB:', e));
 
     // Broadcast to all connected desktop apps
     broadcastToDesktops({ type: 'FORMS_CHANGED', forms: appConfig.formTemplates });
