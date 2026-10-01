@@ -1099,13 +1099,13 @@ app.post('/api/admin/upload-installer', requireAuth, upload.single('file'), asyn
       await dbPool.query(
         `INSERT INTO app_files (id, filename, mime_type, size_bytes, file_data, uploaded_at)
          VALUES ($1, $2, $3, $4, $5, NOW())
-         ON CONFLICT (id) DO UPDATE SET filename = $1, mime_type = $2, size_bytes = $3, file_data = $4, uploaded_at = NOW();`,
+         ON CONFLICT (id) DO UPDATE SET filename = EXCLUDED.filename, mime_type = EXCLUDED.mime_type, size_bytes = EXCLUDED.size_bytes, file_data = EXCLUDED.file_data, uploaded_at = NOW();`,
         [fileId, originalname, mimeType, sizeBytes, file.buffer]
       );
       await dbPool.query(
         `INSERT INTO app_files (id, filename, mime_type, size_bytes, file_data, uploaded_at)
          VALUES ('latest_installer', $1, $2, $3, $4, NOW())
-         ON CONFLICT (id) DO UPDATE SET filename = $1, mime_type = $2, size_bytes = $3, file_data = $4, uploaded_at = NOW();`,
+         ON CONFLICT (id) DO UPDATE SET filename = EXCLUDED.filename, mime_type = EXCLUDED.mime_type, size_bytes = EXCLUDED.size_bytes, file_data = EXCLUDED.file_data, uploaded_at = NOW();`,
         [originalname, mimeType, sizeBytes, file.buffer]
       );
       console.log(`✅ Stored installer "${originalname}" (${(sizeBytes / (1024 * 1024)).toFixed(2)} MB) with id "${fileId}" into PostgreSQL.`);
@@ -1255,7 +1255,7 @@ app.delete('/api/admin/installer-file/:id', requireAuth, async (req, res) => {
         await dbPool.query(
           `INSERT INTO app_files (id, filename, mime_type, size_bytes, file_data, uploaded_at)
            VALUES ('latest_installer', $1, $2, $3, $4, NOW())
-           ON CONFLICT (id) DO UPDATE SET filename = $1, mime_type = $2, size_bytes = $3, file_data = $4, uploaded_at = NOW();`,
+           ON CONFLICT (id) DO UPDATE SET filename = EXCLUDED.filename, mime_type = EXCLUDED.mime_type, size_bytes = EXCLUDED.size_bytes, file_data = EXCLUDED.file_data, uploaded_at = NOW();`,
           [r.filename, r.mime_type, r.size_bytes, r.file_data]
         );
       } else if (fileId === 'latest_installer') {
