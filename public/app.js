@@ -57,13 +57,24 @@ const simContact = document.getElementById('simContact');
 const simBroadcastBanner = document.getElementById('simBroadcastBanner');
 const simBroadcastText = document.getElementById('simBroadcastText');
 
-// Inputs: Version
+// Inputs: Version & History
 const latestVersion = document.getElementById('latestVersion');
 const minSupportedVersion = document.getElementById('minSupportedVersion');
 const chkForceUpdate = document.getElementById('chkForceUpdate');
 const txtForceUpdateStatus = document.getElementById('txtForceUpdateStatus');
 const downloadUrl = document.getElementById('downloadUrl');
 const releaseNotes = document.getElementById('releaseNotes');
+const versionFormTitle = document.getElementById('versionFormTitle');
+const versionEditNotice = document.getElementById('versionEditNotice');
+const lblEditingVersion = document.getElementById('lblEditingVersion');
+const btnCancelEditNotice = document.getElementById('btnCancelEditNotice');
+const btnCancelEditVersion = document.getElementById('btnCancelEditVersion');
+const btnSaveVersionDraft = document.getElementById('btnSaveVersionDraft');
+const btnPublishVersionNow = document.getElementById('btnPublishVersionNow');
+const btnNewVersion = document.getElementById('btnNewVersion');
+const versionHistoryTableBody = document.getElementById('versionHistoryTableBody');
+const installerFilesTableBody = document.getElementById('installerFilesTableBody');
+let editingVersionId = null;
 
 // File Upload Elements
 const fileInstallerUpload = document.getElementById('fileInstallerUpload');
@@ -189,10 +200,9 @@ function switchView(viewName) {
   if (topbarTitle) topbarTitle.textContent = meta.title;
   if (topbarSubtitle) topbarSubtitle.textContent = meta.subtitle;
 
-  // Show Topbar Save button ONLY on views that actually edit system settings!
-  const settingsViews = ['control', 'version', 'broadcast'];
-  if (btnSaveConfig) {
-    btnSaveConfig.style.display = settingsViews.includes(viewName) ? 'inline-flex' : 'none';
+  if (viewName === 'version') {
+    renderVersionHistoryTable();
+    loadInstallerFilesTable();
   }
 
   closeSidebarMobile();
@@ -352,6 +362,7 @@ function showDashboard() {
   loadConfig(true); // Initial load: force = true
   loadClients();
   checkInstallerInfo();
+  loadInstallerFilesTable();
   connectAdminWebSocket();
 
   // Restore any unsaved drafts if user refreshed the page while typing
@@ -535,12 +546,13 @@ function renderConfig(cfg, force = false) {
   }
 
   // Version
-  setInputSafe(latestVersion, cfg.version?.latestVersion || '3.6.0', force);
-  setInputSafe(minSupportedVersion, cfg.version?.minSupportedVersion || '3.5.0', force);
+  setInputSafe(latestVersion, cfg.version?.latestVersion || '3.8.10', force);
+  setInputSafe(minSupportedVersion, cfg.version?.minSupportedVersion || '3.8.10', force);
   setCheckboxSafe(chkForceUpdate, cfg.version?.forceUpdate, force);
   updateForceUpdateUI(chkForceUpdate ? chkForceUpdate.checked : cfg.version?.forceUpdate);
   setInputSafe(downloadUrl, cfg.version?.downloadUrl || '', force);
   setInputSafe(releaseNotes, cfg.version?.releaseNotes || '', force);
+  renderVersionHistoryTable(cfg.versionHistory);
 
   // Broadcast
   setCheckboxSafe(chkBroadcastEnabled, cfg.broadcast?.enabled, force);
@@ -555,7 +567,7 @@ function renderConfig(cfg, force = false) {
 
   // Quick Stats
   if (statLatestVersion) {
-    statLatestVersion.textContent = 'v' + (cfg.version?.latestVersion || '3.6.0');
+    statLatestVersion.textContent = 'v' + (cfg.version?.latestVersion || '3.8.10');
   }
   if (cfg.updatedAt && statLastUpdated) {
     const d = new Date(cfg.updatedAt);
@@ -648,8 +660,13 @@ chkBroadcastEnabled?.addEventListener('change', () => {
 
 // ==== SAVE CONFIGURATION ====
 async function saveConfig() {
-  const allSaveBtns = [btnSaveConfig, btnSaveControl, btnSaveVersion, btnSaveBroadcast].filter(Boolean);
-  allSaveBtns.forEach(btn => btn.disabled = true);
+  const allSaveBtns = [btnSaveControl, btnSaveBroadcast].filter(Boolean);
+  const originalHtml = new Map();
+  allSaveBtns.forEach(btn => {
+    originalHtml.set(btn, btn.innerHTML);
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> <span>กำลังบันทึก...</span>';
+  });
 
   const payload = {
     appEnabled: chkAppEnabled ? chkAppEnabled.checked : true,
@@ -658,13 +675,14 @@ async function saveConfig() {
       contact: maintenanceContact?.value?.trim() || '',
       message: maintenanceMessage?.value?.trim() || ''
     },
-    version: {
-      latestVersion: latestVersion?.value?.trim() || '3.6.0',
-      minSupportedVersion: minSupportedVersion?.value?.trim() || '3.5.0',
+    version: currentConfig?.version || {
+      latestVersion: latestVersion?.value?.trim() || '3.8.10',
+      minSupportedVersion: minSupportedVersion?.value?.trim() || '3.8.10',
       forceUpdate: chkForceUpdate ? chkForceUpdate.checked : false,
       downloadUrl: downloadUrl?.value?.trim() || '',
       releaseNotes: releaseNotes?.value?.trim() || ''
     },
+    versionHistory: currentConfig?.versionHistory || [],
     broadcast: {
       enabled: chkBroadcastEnabled ? chkBroadcastEnabled.checked : false,
       type: broadcastType?.value || 'info',
@@ -684,31 +702,33 @@ async function saveConfig() {
       currentConfig = data.config;
       clearFormDraft();
       renderConfig(currentConfig, true); // Force UI update to newly saved config
-      showToast('บันทึกคำสั่งและส่งผล Real-time ไปยังทุกเครื่องเรียบร้อยแล้ว!');
+      showToast('บันทึกการตั้งค่าและส่งผล Real-time ไปยังทุกเครื่องเรียบร้อยแล้ว!');
     } else {
       showToast(data.error || 'บันทึกไม่สำเร็จ', 'error');
     }
   } catch (err) {
     showToast('เกิดข้อผิดพลาดในการบันทึก: ' + err.message, 'error');
   } finally {
-    allSaveBtns.forEach(btn => btn.disabled = false);
+    allSaveBtns.forEach(btn => {
+      btn.disabled = false;
+      if (originalHtml.has(btn)) btn.innerHTML = originalHtml.get(btn);
+    });
   }
 }
 
 // Auto-save form draft whenever user types so inputs are NEVER lost
 [
   maintenanceTitle, maintenanceContact, maintenanceMessage,
-  latestVersion, minSupportedVersion, downloadUrl, releaseNotes,
   broadcastMessage
 ].forEach(el => {
   el?.addEventListener('input', saveFormDraft);
 });
 
-[chkAppEnabled, chkAppEnabledQuick, chkForceUpdate, chkBroadcastEnabled, broadcastType].forEach(el => {
+[chkAppEnabled, chkAppEnabledQuick, chkBroadcastEnabled, broadcastType].forEach(el => {
   el?.addEventListener('change', saveFormDraft);
 });
 
-[btnSaveConfig, btnSaveControl, btnSaveVersion, btnSaveBroadcast].forEach(btn => {
+[btnSaveControl, btnSaveBroadcast].forEach(btn => {
   btn?.addEventListener('click', saveConfig);
 });
 
@@ -876,6 +896,557 @@ if (changePasswordForm) {
   });
 }
 
+// ==== VERSION MANAGEMENT & HISTORY TABLE ====
+function renderVersionHistoryTable(historyList = null) {
+  if (!versionHistoryTableBody) return;
+  const list = historyList || currentConfig?.versionHistory || [];
+
+  if (!Array.isArray(list) || list.length === 0) {
+    const activeVer = currentConfig?.version?.latestVersion || '3.8.10';
+    const singleEntry = {
+      id: 'ver_' + activeVer.replace(/\./g, '_'),
+      latestVersion: activeVer,
+      minSupportedVersion: currentConfig?.version?.minSupportedVersion || activeVer,
+      forceUpdate: Boolean(currentConfig?.version?.forceUpdate),
+      downloadUrl: currentConfig?.version?.downloadUrl || '',
+      releaseNotes: currentConfig?.version?.releaseNotes || 'เวอร์ชันตั้งต้นของระบบ',
+      status: 'published',
+      updatedAt: currentConfig?.updatedAt || new Date().toISOString(),
+      updatedBy: currentConfig?.updatedBy || 'admin'
+    };
+    if (currentConfig) {
+      currentConfig.versionHistory = [singleEntry];
+    }
+    return renderVersionHistoryTable([singleEntry]);
+  }
+
+  // Sort: published items first, then newer timestamps first
+  const sorted = [...list].sort((a, b) => {
+    if (a.status === 'published' && b.status !== 'published') return -1;
+    if (b.status === 'published' && a.status !== 'published') return 1;
+    const tA = new Date(a.updatedAt || 0).getTime();
+    const tB = new Date(b.updatedAt || 0).getTime();
+    return tB - tA;
+  });
+
+  versionHistoryTableBody.innerHTML = sorted.map(v => {
+    const isPublished = v.status === 'published';
+    const statusBadge = isPublished
+      ? '<span class="badge-published"><span class="pulse-dot" style="width:6px; height:6px;"></span> 🚀 เผยแพร่อยู่</span>'
+      : '<span class="badge-draft">📝 แบบร่าง (Draft)</span>';
+
+    const forceBadge = v.forceUpdate
+      ? '<span class="badge" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); font-size: 11px; padding: 2px 7px;">⚠️ บังคับอัปเดต</span>'
+      : '<span class="text-muted" style="font-size: 12px;">ไม่บังคับ</span>';
+
+    const dateStr = v.updatedAt
+      ? new Date(v.updatedAt).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' }) + (v.updatedBy ? ` (${escapeHtml(v.updatedBy)})` : '')
+      : '-';
+
+    const notes = v.releaseNotes
+      ? `<span title="${escapeHtml(v.releaseNotes)}" style="cursor:help; border-bottom:1px dotted rgba(255,255,255,0.3); font-size: 12.5px;">${escapeHtml(v.releaseNotes.length > 30 ? v.releaseNotes.substring(0, 30) + '...' : v.releaseNotes)}</span>`
+      : '<span class="text-muted" style="font-size: 12px;">-</span>';
+
+    const isCurrentlyEditing = editingVersionId === v.id;
+    const rowClass = isCurrentlyEditing ? 'style="background: rgba(59, 130, 246, 0.12); border-left: 3px solid #3b82f6;"' : '';
+
+    return `
+      <tr ${rowClass}>
+        <td><span class="badge-version">v${escapeHtml(v.latestVersion || '-')}</span></td>
+        <td><code style="color: #93c5fd; font-size: 12px;">v${escapeHtml(v.minSupportedVersion || '-')}</code></td>
+        <td>${forceBadge}</td>
+        <td style="max-width: 220px;">${notes}</td>
+        <td>${statusBadge}</td>
+        <td style="font-size: 12px; color: var(--text-muted);">${dateStr}</td>
+        <td style="text-align: right; white-space: nowrap;">
+          <button type="button" class="btn btn-xs btn-outline" onclick="window.startEditVersion('${escapeHtml(v.id)}')" title="แก้ไขข้อมูลเวอร์ชันนี้">
+            <span>✏️ แก้ไข</span>
+          </button>
+          ${!isPublished ? `
+            <button type="button" class="btn btn-xs btn-success" onclick="window.publishVersionFromTable('${escapeHtml(v.id)}')" title="เผยแพร่เวอร์ชันนี้ให้เครื่องผู้ใช้ทุกคนทันที">
+              <span>🚀 เผยแพร่</span>
+            </button>
+            <button type="button" class="btn btn-xs btn-outline" style="color: #f87171; border-color: rgba(248, 113, 113, 0.35);" onclick="window.deleteVersionItem('${escapeHtml(v.id)}')" title="ลบเวอร์ชันนี้">
+              <span>🗑️ ลบ</span>
+            </button>
+          ` : `
+            <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 11px; padding: 3px 8px; border: 1px solid rgba(16, 185, 129, 0.3);">ใช้งานอยู่</span>
+          `}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+window.startEditVersion = function(id) {
+  const list = currentConfig?.versionHistory || [];
+  const item = list.find(v => v.id === id);
+  if (!item) {
+    showToast('ไม่พบข้อมูลเวอร์ชันที่ต้องการแก้ไข', 'error');
+    return;
+  }
+
+  editingVersionId = item.id;
+  if (latestVersion) latestVersion.value = item.latestVersion || '';
+  if (minSupportedVersion) minSupportedVersion.value = item.minSupportedVersion || '';
+  if (chkForceUpdate) {
+    chkForceUpdate.checked = Boolean(item.forceUpdate);
+    updateForceUpdateUI(chkForceUpdate.checked);
+  }
+  if (downloadUrl) downloadUrl.value = item.downloadUrl || '';
+  if (releaseNotes) releaseNotes.value = item.releaseNotes || '';
+
+  if (versionFormTitle) versionFormTitle.textContent = `แก้ไขเวอร์ชัน (v${item.latestVersion})`;
+  if (lblEditingVersion) lblEditingVersion.textContent = `v${item.latestVersion} (${item.status === 'published' ? 'เผยแพร่อยู่' : 'แบบร่าง'})`;
+  if (versionEditNotice) versionEditNotice.classList.remove('hidden');
+  if (btnCancelEditVersion) btnCancelEditVersion.classList.remove('hidden');
+
+  renderVersionHistoryTable();
+
+  const editorCard = document.getElementById('cardVersionEditor');
+  if (editorCard) {
+    editorCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  if (latestVersion) latestVersion.focus();
+};
+
+window.cancelEditVersion = function() {
+  editingVersionId = null;
+  if (versionFormTitle) versionFormTitle.textContent = 'กำหนดข้อมูลเวอร์ชัน (Version Editor)';
+  if (versionEditNotice) versionEditNotice.classList.add('hidden');
+  if (btnCancelEditVersion) btnCancelEditVersion.classList.add('hidden');
+
+  if (currentConfig?.version) {
+    setInputSafe(latestVersion, currentConfig.version.latestVersion || '3.8.10', true);
+    setInputSafe(minSupportedVersion, currentConfig.version.minSupportedVersion || '3.8.10', true);
+    setCheckboxSafe(chkForceUpdate, currentConfig.version.forceUpdate, true);
+    updateForceUpdateUI(chkForceUpdate ? chkForceUpdate.checked : false);
+    setInputSafe(downloadUrl, currentConfig.version.downloadUrl || '', true);
+    setInputSafe(releaseNotes, currentConfig.version.releaseNotes || '', true);
+  }
+  renderVersionHistoryTable();
+};
+
+btnCancelEditVersion?.addEventListener('click', window.cancelEditVersion);
+btnCancelEditNotice?.addEventListener('click', window.cancelEditVersion);
+
+btnNewVersion?.addEventListener('click', () => {
+  editingVersionId = null;
+  if (versionFormTitle) versionFormTitle.textContent = 'สร้างเวอร์ชันใหม่ (New Version)';
+  if (versionEditNotice) versionEditNotice.classList.add('hidden');
+  if (btnCancelEditVersion) btnCancelEditVersion.classList.remove('hidden');
+
+  const currentV = currentConfig?.version?.latestVersion || '3.8.10';
+  const parts = currentV.split('.').map(n => parseInt(n, 10));
+  if (parts.length === 3 && !parts.some(isNaN)) {
+    parts[2] += 1;
+    if (latestVersion) latestVersion.value = parts.join('.');
+    if (minSupportedVersion) minSupportedVersion.value = currentV;
+  } else {
+    if (latestVersion) latestVersion.value = '';
+    if (minSupportedVersion) minSupportedVersion.value = '';
+  }
+  if (chkForceUpdate) {
+    chkForceUpdate.checked = false;
+    updateForceUpdateUI(false);
+  }
+  if (releaseNotes) releaseNotes.value = '';
+
+  const editorCard = document.getElementById('cardVersionEditor');
+  if (editorCard) editorCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (latestVersion) latestVersion.focus();
+});
+
+async function saveVersionDraft() {
+  const vNum = latestVersion?.value?.trim();
+  if (!vNum) {
+    showToast('กรุณาระบุเลขเวอร์ชัน เช่น 3.8.10', 'error');
+    if (latestVersion) latestVersion.focus();
+    return;
+  }
+
+  const btn = btnSaveVersionDraft;
+  const originalHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> <span>กำลังบันทึก...</span>';
+  }
+
+  try {
+    const list = Array.isArray(currentConfig?.versionHistory) ? [...currentConfig.versionHistory] : [];
+    const minVer = minSupportedVersion?.value?.trim() || vNum;
+    const force = Boolean(chkForceUpdate?.checked);
+    const url = downloadUrl?.value?.trim() || '';
+    const notes = releaseNotes?.value?.trim() || '';
+
+    let updatedItem = null;
+    if (editingVersionId) {
+      const idx = list.findIndex(x => x.id === editingVersionId);
+      if (idx !== -1) {
+        list[idx] = {
+          ...list[idx],
+          latestVersion: vNum,
+          minSupportedVersion: minVer,
+          forceUpdate: force,
+          downloadUrl: url,
+          releaseNotes: notes,
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentUser?.username || 'admin'
+        };
+        updatedItem = list[idx];
+      }
+    }
+
+    if (!updatedItem) {
+      const existingIdx = list.findIndex(x => x.latestVersion === vNum);
+      const newEntry = {
+        id: 'ver_' + Date.now(),
+        latestVersion: vNum,
+        minSupportedVersion: minVer,
+        forceUpdate: force,
+        downloadUrl: url,
+        releaseNotes: notes,
+        status: 'draft',
+        updatedAt: new Date().toISOString(),
+        updatedBy: currentUser?.username || 'admin'
+      };
+      if (existingIdx !== -1) {
+        list[existingIdx] = { ...list[existingIdx], ...newEntry, id: list[existingIdx].id };
+      } else {
+        list.unshift(newEntry);
+      }
+    }
+
+    let activeVersion = currentConfig?.version;
+    if (editingVersionId && updatedItem && updatedItem.status === 'published') {
+      activeVersion = {
+        latestVersion: updatedItem.latestVersion,
+        minSupportedVersion: updatedItem.minSupportedVersion,
+        forceUpdate: updatedItem.forceUpdate,
+        downloadUrl: updatedItem.downloadUrl,
+        releaseNotes: updatedItem.releaseNotes
+      };
+    }
+
+    const payload = {
+      appEnabled: currentConfig?.appEnabled !== undefined ? currentConfig.appEnabled : true,
+      maintenance: currentConfig?.maintenance,
+      broadcast: currentConfig?.broadcast,
+      version: activeVersion,
+      versionHistory: list
+    };
+
+    const res = await fetch('/api/admin/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      currentConfig = data.config;
+      window.cancelEditVersion();
+      showToast(`💾 บันทึกแบบร่างเวอร์ชัน v${vNum} เรียบร้อยแล้ว!`);
+    } else {
+      showToast(data.error || 'บันทึกแบบร่างไม่สำเร็จ', 'error');
+    }
+  } catch (err) {
+    showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  }
+}
+
+async function publishVersionNow(specificId = null) {
+  let vNum, minVer, force, url, notes;
+  let targetId = specificId || editingVersionId;
+
+  if (targetId) {
+    const list = currentConfig?.versionHistory || [];
+    const item = list.find(x => x.id === targetId);
+    if (item && targetId !== editingVersionId) {
+      vNum = item.latestVersion;
+      minVer = item.minSupportedVersion;
+      force = Boolean(item.forceUpdate);
+      url = item.downloadUrl;
+      notes = item.releaseNotes;
+    } else {
+      vNum = latestVersion?.value?.trim() || item?.latestVersion;
+      minVer = minSupportedVersion?.value?.trim() || item?.minSupportedVersion || vNum;
+      force = Boolean(chkForceUpdate?.checked);
+      url = downloadUrl?.value?.trim() || item?.downloadUrl || '';
+      notes = releaseNotes?.value?.trim() || item?.releaseNotes || '';
+    }
+  } else {
+    vNum = latestVersion?.value?.trim();
+    minVer = minSupportedVersion?.value?.trim() || vNum;
+    force = Boolean(chkForceUpdate?.checked);
+    url = downloadUrl?.value?.trim() || '';
+    notes = releaseNotes?.value?.trim() || '';
+  }
+
+  if (!vNum) {
+    showToast('กรุณาระบุเลขเวอร์ชันที่ต้องการเผยแพร่', 'error');
+    if (latestVersion) latestVersion.focus();
+    return;
+  }
+
+  const confirmMsg = `🚀 ยืนยันการเผยแพร่เวอร์ชัน "v${vNum}" หรือไม่?\n\nทุกเครื่อง Desktop ที่กำลังออนไลน์ทั่วประเทศจะได้รับคำสั่งและข้อมูลเวอร์ชันนี้แบบ Real-time ทันที${force ? '\n⚠️ มีการบังคับให้อัปเดตทันที!' : ''}`;
+  if (!confirm(confirmMsg)) return;
+
+  const btn = btnPublishVersionNow;
+  const originalHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> <span>กำลังเผยแพร่...</span>';
+  }
+
+  try {
+    const list = Array.isArray(currentConfig?.versionHistory) ? [...currentConfig.versionHistory] : [];
+
+    list.forEach(item => {
+      if (item.status === 'published') {
+        item.status = 'draft';
+      }
+    });
+
+    let found = false;
+    if (targetId) {
+      const idx = list.findIndex(x => x.id === targetId);
+      if (idx !== -1) {
+        list[idx] = {
+          ...list[idx],
+          latestVersion: vNum,
+          minSupportedVersion: minVer,
+          forceUpdate: force,
+          downloadUrl: url,
+          releaseNotes: notes,
+          status: 'published',
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentUser?.username || 'admin'
+        };
+        found = true;
+      }
+    }
+
+    if (!found) {
+      const existingIdx = list.findIndex(x => x.latestVersion === vNum);
+      const pubEntry = {
+        id: targetId || ('ver_' + Date.now()),
+        latestVersion: vNum,
+        minSupportedVersion: minVer,
+        forceUpdate: force,
+        downloadUrl: url,
+        releaseNotes: notes,
+        status: 'published',
+        updatedAt: new Date().toISOString(),
+        updatedBy: currentUser?.username || 'admin'
+      };
+      if (existingIdx !== -1) {
+        list[existingIdx] = pubEntry;
+      } else {
+        list.unshift(pubEntry);
+      }
+    }
+
+    const payload = {
+      appEnabled: currentConfig?.appEnabled !== undefined ? currentConfig.appEnabled : true,
+      maintenance: currentConfig?.maintenance,
+      broadcast: currentConfig?.broadcast,
+      version: {
+        latestVersion: vNum,
+        minSupportedVersion: minVer,
+        forceUpdate: force,
+        downloadUrl: url,
+        releaseNotes: notes
+      },
+      versionHistory: list
+    };
+
+    const res = await fetch('/api/admin/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      currentConfig = data.config;
+      window.cancelEditVersion();
+      showToast(`🚀 เผยแพร่เวอร์ชัน v${vNum} และส่งผล Real-time ให้ทุกเครื่องเรียบร้อยแล้ว!`);
+    } else {
+      showToast(data.error || 'เผยแพร่ไม่สำเร็จ', 'error');
+    }
+  } catch (err) {
+    showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  }
+}
+
+btnSaveVersionDraft?.addEventListener('click', saveVersionDraft);
+btnPublishVersionNow?.addEventListener('click', () => publishVersionNow());
+
+window.publishVersionFromTable = function(id) {
+  publishVersionNow(id);
+};
+
+window.deleteVersionItem = async function(id) {
+  const list = currentConfig?.versionHistory || [];
+  const item = list.find(x => x.id === id);
+  if (!item) return;
+
+  if (item.status === 'published') {
+    showToast('ไม่สามารถลบเวอร์ชันที่กำลังเผยแพร่อยู่ได้ กรุณาเผยแพร่เวอร์ชันอื่นก่อน', 'error');
+    return;
+  }
+
+  if (!confirm(`ต้องการลบเวอร์ชัน "v${item.latestVersion}" ออกจากรายการประวัติหรือไม่?`)) {
+    return;
+  }
+
+  const updatedList = list.filter(x => x.id !== id);
+  const payload = {
+    appEnabled: currentConfig?.appEnabled !== undefined ? currentConfig.appEnabled : true,
+    maintenance: currentConfig?.maintenance,
+    broadcast: currentConfig?.broadcast,
+    version: currentConfig?.version,
+    versionHistory: updatedList
+  };
+
+  try {
+    const res = await fetch('/api/admin/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      currentConfig = data.config;
+      if (editingVersionId === id) {
+        window.cancelEditVersion();
+      } else {
+        renderVersionHistoryTable();
+      }
+      showToast(`ลบเวอร์ชัน v${item.latestVersion} ออกจากประวัติเรียบร้อยแล้ว`);
+    } else {
+      showToast(data.error || 'ลบไม่สำเร็จ', 'error');
+    }
+  } catch (err) {
+    showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+  }
+};
+
+// ==== INSTALLER FILES TABLE & STORAGE ====
+async function loadInstallerFilesTable() {
+  if (!installerFilesTableBody) return;
+  try {
+    const res = await fetch('/api/admin/installer-files');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.files)) {
+        renderInstallerFilesTable(data.files);
+        return;
+      }
+    }
+    renderInstallerFilesTable([]);
+  } catch (err) {
+    installerFilesTableBody.innerHTML = `
+      <tr>
+        <td colspan="5" style="text-align: center; color: #f87171; padding: 24px;">ไม่สามารถโหลดรายการไฟล์ได้: ${escapeHtml(err.message)}</td>
+      </tr>
+    `;
+  }
+}
+
+function renderInstallerFilesTable(files = []) {
+  if (!installerFilesTableBody) return;
+
+  if (files.length === 0) {
+    installerFilesTableBody.innerHTML = `
+      <tr>
+        <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 32px;">
+          ยังไม่มีไฟล์ตัวติดตั้งในฐานข้อมูล กดปุ่ม "📤 อัปโหลดไฟล์ใหม่ (.exe)" ด้านบนเพื่อเริ่มต้นจัดเก็บไฟล์
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  const currentDownloadUrl = currentConfig?.version?.downloadUrl || '';
+
+  installerFilesTableBody.innerHTML = files.map(f => {
+    const isCurrent = currentDownloadUrl.includes(f.id) || currentDownloadUrl.endsWith('/api/download/installer');
+    const statusBadge = isCurrent
+      ? '<span class="badge-active-file"><span class="pulse-dot" style="width:6px; height:6px;"></span> ลิงก์ดาวน์โหลดหลัก</span>'
+      : '<span class="badge-stored">📦 บันทึกใน PostgreSQL</span>';
+
+    const dateStr = f.uploadedAt
+      ? new Date(f.uploadedAt).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })
+      : '-';
+
+    return `
+      <tr>
+        <td>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1.1rem;">💿</span>
+            <code style="font-size: 12.5px; font-weight: 600; color: #e2e8f0;">${escapeHtml(f.filename)}</code>
+          </div>
+        </td>
+        <td><strong>${escapeHtml(f.sizeMb)} MB</strong></td>
+        <td style="font-size: 12px; color: var(--text-muted);">${dateStr}</td>
+        <td>${statusBadge}</td>
+        <td style="text-align: right; white-space: nowrap;">
+          <a href="${escapeHtml(f.downloadUrl)}" target="_blank" class="btn btn-xs btn-outline" title="ทดสอบดาวน์โหลดไฟล์นี้">
+            <span>📥 ดาวน์โหลด</span>
+          </a>
+          <button type="button" class="btn btn-xs btn-secondary" onclick="window.useInstallerUrl('${escapeHtml(f.downloadUrl)}')" title="นำลิงก์นี้ไปใส่ในช่อง Download URL ด้านบน">
+            <span>🔗 นำลิงก์ไปใช้</span>
+          </button>
+          <button type="button" class="btn btn-xs btn-outline" style="color: #f87171; border-color: rgba(248, 113, 113, 0.35);" onclick="window.deleteInstallerFile('${escapeHtml(f.id)}', '${escapeHtml(f.filename)}')" title="ลบไฟล์นี้ออกจากฐานข้อมูลอย่างถาวร">
+            <span>🗑️ ลบไฟล์</span>
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+window.useInstallerUrl = function(url) {
+  if (downloadUrl) {
+    downloadUrl.value = url;
+    downloadUrl.focus();
+    showToast('นำลิงก์ไฟล์ไปใส่ในช่องกรอก URL เรียบร้อยแล้ว!');
+  }
+};
+
+window.deleteInstallerFile = async function(fileId, filename) {
+  const ok = confirm(`⚠️ ยืนยันการลบไฟล์ "${filename}" ออกจากฐานข้อมูล PostgreSQL หรือไม่?\n\nการลบนี้จะลบข้อมูลไฟล์ออกอย่างถาวรและไม่สามารถกู้คืนได้`);
+  if (!ok) return;
+
+  try {
+    const res = await fetch(`/api/admin/installer-file/${encodeURIComponent(fileId)}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      showToast(data.message || `ลบไฟล์ "${filename}" สำเร็จแล้ว`);
+      loadInstallerFilesTable();
+      checkInstallerInfo();
+    } else {
+      showToast(data.error || 'ลบไฟล์ไม่สำเร็จ', 'error');
+    }
+  } catch (err) {
+    showToast('เกิดข้อผิดพลาดในการลบไฟล์: ' + err.message, 'error');
+  }
+};
+
 // ==== INSTALLER FILE UPLOAD & DATABASE STORAGE ====
 async function checkInstallerInfo() {
   try {
@@ -959,6 +1530,7 @@ function uploadInstallerFile(file) {
           renderConfig(currentConfig, true);
         }
         checkInstallerInfo();
+        loadInstallerFilesTable();
       } else {
         showToast(data.error || 'อัปโหลดไม่สำเร็จ', 'error');
       }

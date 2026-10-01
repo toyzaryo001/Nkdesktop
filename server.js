@@ -148,12 +148,13 @@ const DEFAULT_CONFIG = {
     contact: 'ติดต่อผู้ดูแลระบบ'
   },
   version: {
-    latestVersion: '3.6.0',
-    minSupportedVersion: '3.5.0',
-    forceUpdate: false,
+    latestVersion: '3.8.10',
+    minSupportedVersion: '3.8.10',
+    forceUpdate: true,
     downloadUrl: '',
-    releaseNotes: 'NK Helper Desktop v3.6.0 (Enterprise Online) — ระบบควบคุมออนไลน์เต็มรูปแบบ ตารางเหลืองบวกรวมยอดเติม-ลดแม่นยำ 100%'
+    releaseNotes: 'NK Helper Desktop v3.8.10 (Enterprise Online) — เลือกระบบเกตเวย์ CRS / SwiftPay และระบบตรวจจับเรียลไทม์'
   },
+  versionHistory: [],
   broadcast: {
     enabled: false,
     type: 'info', // 'info' | 'warning' | 'danger'
@@ -163,13 +164,35 @@ const DEFAULT_CONFIG = {
   updatedBy: 'system'
 };
 
+function ensureVersionHistory(cfg) {
+  if (!cfg.versionHistory || !Array.isArray(cfg.versionHistory) || cfg.versionHistory.length === 0) {
+    const curVer = cfg.version?.latestVersion || '3.8.10';
+    cfg.versionHistory = [
+      {
+        id: 'ver_' + String(curVer).replace(/[^a-zA-Z0-9_-]/g, '_'),
+        version: curVer,
+        minSupportedVersion: cfg.version?.minSupportedVersion || curVer,
+        forceUpdate: Boolean(cfg.version?.forceUpdate),
+        downloadUrl: cfg.version?.downloadUrl || '',
+        releaseNotes: cfg.version?.releaseNotes || 'เวอร์ชันปัจจุบัน (Active)',
+        status: 'published',
+        publishedAt: cfg.updatedAt || new Date().toISOString(),
+        createdAt: cfg.updatedAt || new Date().toISOString(),
+        updatedAt: cfg.updatedAt || new Date().toISOString()
+      }
+    ];
+  }
+}
+
 function loadConfig() {
   // 1. Try persistent volume file
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       const raw = fs.readFileSync(CONFIG_FILE, 'utf8');
       const parsed = JSON.parse(raw);
-      return { ...DEFAULT_CONFIG, ...parsed };
+      const merged = { ...DEFAULT_CONFIG, ...parsed };
+      ensureVersionHistory(merged);
+      return merged;
     }
   } catch (err) {
     console.error('Error loading config from persistent file:', err.message);
@@ -181,13 +204,16 @@ function loadConfig() {
       const raw = fs.readFileSync(BUNDLED_CONFIG_FILE, 'utf8');
       const parsed = JSON.parse(raw);
       const merged = { ...DEFAULT_CONFIG, ...parsed };
+      ensureVersionHistory(merged);
       saveConfigFile(merged);
       return merged;
     }
   } catch (e) {}
 
-  saveConfigFile(DEFAULT_CONFIG);
-  return DEFAULT_CONFIG;
+  const initial = { ...DEFAULT_CONFIG };
+  ensureVersionHistory(initial);
+  saveConfigFile(initial);
+  return initial;
 }
 
 function saveConfigFile(cfg) {
@@ -712,6 +738,43 @@ app.get('/api/download/installer', async (req, res) => {
   }
 });
 
+// Download Specific File by ID
+app.get('/api/download/file/:id', async (req, res) => {
+  try {
+    const fileId = req.params.id;
+    if (dbPool) {
+      const dbRes = await dbPool.query(
+        `SELECT filename, mime_type, size_bytes, file_data FROM app_files WHERE id = $1 LIMIT 1;`,
+        [fileId]
+      );
+      if (dbRes.rows.length > 0) {
+        const r = dbRes.rows[0];
+        res.setHeader('Content-Type', r.mime_type || 'application/octet-stream');
+        res.setHeader('Content-Length', r.size_bytes);
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(r.filename || 'NK-Helper-Setup.exe')}"`);
+        return res.send(r.file_data);
+      }
+    }
+
+    const uploadDir = path.join(DATA_DIR, 'uploads');
+    const binPath = path.join(uploadDir, `${fileId}.bin`);
+    const metaPath = path.join(uploadDir, `${fileId}.json`);
+    if (fs.existsSync(binPath) && fs.existsSync(metaPath)) {
+      try {
+        const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+        res.setHeader('Content-Type', meta.mime_type || 'application/octet-stream');
+        res.setHeader('Content-Length', meta.size_bytes);
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(meta.filename || 'NK-Helper-Setup.exe')}"`);
+        return fs.createReadStream(binPath).pipe(res);
+      } catch (e) {}
+    }
+
+    return res.status(404).send('ไม่พบไฟล์ตัวติดตั้งที่ระบุในฐานข้อมูล');
+  } catch (err) {
+    return res.status(500).send('เกิดข้อผิดพลาดในการดาวน์โหลด: ' + err.message);
+  }
+});
+
 // 2. Heartbeat (NK Desktop reports its live status)
 app.post('/api/app-heartbeat', (req, res) => {
   try {
@@ -904,6 +967,12 @@ app.post('/api/admin/config', requireAuth, async (req, res) => {
       };
     }
 
+    if (Array.isArray(req.body.versionHistory)) {
+      appConfig.versionHistory = req.body.versionHistory;
+    } else {
+      ensureVersionHistory(appConfig);
+    }
+
     if (broadcast && typeof broadcast === 'object') {
       appConfig.broadcast = {
         enabled: Boolean(broadcast.enabled),
@@ -950,16 +1019,23 @@ app.post('/api/admin/upload-installer', requireAuth, upload.single('file'), asyn
     const originalname = file.originalname || 'NK-Helper-Setup.exe';
     const mimeType = file.mimetype || 'application/octet-stream';
     const sizeBytes = file.size;
+    const fileId = 'installer_' + Date.now();
 
-    // 1. Save to PostgreSQL BYTEA
+    // 1. Save to PostgreSQL BYTEA (Save both unique record and update latest_installer)
     if (dbPool) {
+      await dbPool.query(
+        `INSERT INTO app_files (id, filename, mime_type, size_bytes, file_data, uploaded_at)
+         VALUES ($1, $2, $3, $4, $5, NOW())
+         ON CONFLICT (id) DO UPDATE SET filename = $1, mime_type = $2, size_bytes = $3, file_data = $4, uploaded_at = NOW();`,
+        [fileId, originalname, mimeType, sizeBytes, file.buffer]
+      );
       await dbPool.query(
         `INSERT INTO app_files (id, filename, mime_type, size_bytes, file_data, uploaded_at)
          VALUES ('latest_installer', $1, $2, $3, $4, NOW())
          ON CONFLICT (id) DO UPDATE SET filename = $1, mime_type = $2, size_bytes = $3, file_data = $4, uploaded_at = NOW();`,
         [originalname, mimeType, sizeBytes, file.buffer]
       );
-      console.log(`✅ Stored installer "${originalname}" (${(sizeBytes / (1024 * 1024)).toFixed(2)} MB) into PostgreSQL.`);
+      console.log(`✅ Stored installer "${originalname}" (${(sizeBytes / (1024 * 1024)).toFixed(2)} MB) with id "${fileId}" into PostgreSQL.`);
     }
 
     // 2. Cache to local disk for fast streaming
@@ -968,8 +1044,17 @@ app.post('/api/admin/upload-installer', requireAuth, upload.single('file'), asyn
       try { fs.mkdirSync(uploadDir, { recursive: true }); } catch (e) {}
     }
     try {
+      fs.writeFileSync(path.join(uploadDir, `${fileId}.bin`), file.buffer);
+      fs.writeFileSync(path.join(uploadDir, `${fileId}.json`), JSON.stringify({
+        id: fileId,
+        filename: originalname,
+        mime_type: mimeType,
+        size_bytes: sizeBytes,
+        uploaded_at: new Date().toISOString()
+      }));
       fs.writeFileSync(path.join(uploadDir, 'latest_installer.bin'), file.buffer);
       fs.writeFileSync(path.join(uploadDir, 'latest_installer.json'), JSON.stringify({
+        id: fileId,
         filename: originalname,
         mime_type: mimeType,
         size_bytes: sizeBytes,
@@ -1007,6 +1092,7 @@ app.post('/api/admin/upload-installer', requireAuth, upload.single('file'), asyn
     return res.json({
       ok: true,
       message: `อัปโหลดไฟล์ ${originalname} (${(sizeBytes / (1024 * 1024)).toFixed(2)} MB) และบันทึกเข้าฐานข้อมูลเรียบร้อยแล้ว!`,
+      fileId,
       filename: originalname,
       sizeMb: (sizeBytes / (1024 * 1024)).toFixed(2),
       downloadUrl,
@@ -1018,11 +1104,111 @@ app.post('/api/admin/upload-installer', requireAuth, upload.single('file'), asyn
   }
 });
 
+// Get List of All Uploaded Installer Files
+app.get('/api/admin/installer-files', requireAuth, async (req, res) => {
+  try {
+    const list = [];
+    const host = req.get('host');
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+
+    if (dbPool) {
+      const dbRes = await dbPool.query(
+        `SELECT id, filename, mime_type, size_bytes, uploaded_at FROM app_files ORDER BY uploaded_at DESC;`
+      );
+      // Group / filter alias if file has unique record and latest_installer record
+      const hasUniqueRecords = dbRes.rows.some(r => r.id !== 'latest_installer');
+      for (const r of dbRes.rows) {
+        if (r.id === 'latest_installer' && hasUniqueRecords) {
+          // If unique records already exist, skip the alias row to avoid duplicate listing
+          continue;
+        }
+        list.push({
+          id: r.id,
+          filename: r.filename,
+          mimeType: r.mime_type,
+          sizeBytes: Number(r.size_bytes),
+          sizeMb: (Number(r.size_bytes) / (1024 * 1024)).toFixed(2),
+          uploadedAt: r.uploaded_at,
+          downloadUrl: `${protocol}://${host}/api/download/file/${r.id}`
+        });
+      }
+    } else {
+      const uploadDir = path.join(DATA_DIR, 'uploads');
+      if (fs.existsSync(uploadDir)) {
+        const jsonFiles = fs.readdirSync(uploadDir).filter(f => f.endsWith('.json'));
+        const hasUniques = jsonFiles.some(f => f !== 'latest_installer.json');
+        for (const jf of jsonFiles) {
+          if (jf === 'latest_installer.json' && hasUniques) continue;
+          try {
+            const meta = JSON.parse(fs.readFileSync(path.join(uploadDir, jf), 'utf8'));
+            const fid = meta.id || jf.replace('.json', '');
+            list.push({
+              id: fid,
+              filename: meta.filename,
+              mimeType: meta.mime_type || 'application/octet-stream',
+              sizeBytes: Number(meta.size_bytes || 0),
+              sizeMb: (Number(meta.size_bytes || 0) / (1024 * 1024)).toFixed(2),
+              uploadedAt: meta.uploaded_at || new Date().toISOString(),
+              downloadUrl: `${protocol}://${host}/api/download/file/${fid}`
+            });
+          } catch (e) {}
+        }
+      }
+    }
+
+    return res.json({ ok: true, files: list });
+  } catch (err) {
+    console.error('Error listing installer files:', err);
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Delete an Uploaded Installer File
+app.delete('/api/admin/installer-file/:id', requireAuth, async (req, res) => {
+  try {
+    const fileId = req.params.id;
+    if (!fileId) return res.status(400).json({ ok: false, error: 'กรุณาระบุ ID ไฟล์ที่ต้องการลบ' });
+
+    if (dbPool) {
+      // 1. Delete from PostgreSQL
+      await dbPool.query(`DELETE FROM app_files WHERE id = $1;`, [fileId]);
+
+      // 2. If deleted file was the one mirrored in latest_installer, re-mirror from remaining files
+      const remaining = await dbPool.query(
+        `SELECT filename, mime_type, size_bytes, file_data FROM app_files WHERE id <> 'latest_installer' ORDER BY uploaded_at DESC LIMIT 1;`
+      );
+      if (remaining.rows.length > 0) {
+        const r = remaining.rows[0];
+        await dbPool.query(
+          `INSERT INTO app_files (id, filename, mime_type, size_bytes, file_data, uploaded_at)
+           VALUES ('latest_installer', $1, $2, $3, $4, NOW())
+           ON CONFLICT (id) DO UPDATE SET filename = $1, mime_type = $2, size_bytes = $3, file_data = $4, uploaded_at = NOW();`,
+          [r.filename, r.mime_type, r.size_bytes, r.file_data]
+        );
+      } else if (fileId === 'latest_installer') {
+        await dbPool.query(`DELETE FROM app_files WHERE id = 'latest_installer';`);
+      }
+    }
+
+    // 3. Clean up disk cache
+    const uploadDir = path.join(DATA_DIR, 'uploads');
+    const binPath = path.join(uploadDir, `${fileId}.bin`);
+    const jsonPath = path.join(uploadDir, `${fileId}.json`);
+    if (fs.existsSync(binPath)) { try { fs.unlinkSync(binPath); } catch (e) {} }
+    if (fs.existsSync(jsonPath)) { try { fs.unlinkSync(jsonPath); } catch (e) {} }
+
+    return res.json({ ok: true, message: 'ลบไฟล์ออกจากฐานข้อมูลเรียบร้อยแล้ว' });
+  } catch (err) {
+    console.error('Error deleting installer file:', err);
+    return res.status(500).json({ ok: false, error: 'เกิดข้อผิดพลาดในการลบไฟล์: ' + err.message });
+  }
+});
+
 // Check Installer File Info in Database
 app.get('/api/admin/installer-info', requireAuth, async (req, res) => {
   try {
     if (dbPool) {
-      const dbRes = await dbPool.query(`SELECT filename, mime_type, size_bytes, uploaded_at FROM app_files WHERE id = 'latest_installer' LIMIT 1;`);
+      const dbRes = await dbPool.query(`SELECT filename, mime_type, size_bytes, uploaded_at FROM app_files ORDER BY (CASE WHEN id = 'latest_installer' THEN 1 ELSE 0 END) DESC, uploaded_at DESC LIMIT 1;`);
       if (dbRes.rows.length > 0) {
         const r = dbRes.rows[0];
         const host = req.get('host');

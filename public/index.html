@@ -147,11 +147,7 @@
           </div>
 
           <div class="topbar-right">
-            <button id="btnSaveConfig" class="btn btn-primary btn-save" style="display: none;">
-              <span class="btn-icon">💾</span>
-              <span class="btn-text">บันทึกการเปลี่ยนแปลง (Save)</span>
-              <span class="btn-spinner hidden"></span>
-            </button>
+            <!-- Top Save button removed as requested -->
           </div>
         </header>
 
@@ -311,26 +307,31 @@
 
           <!-- ================= VIEW 3: VERSION MANAGEMENT ================= -->
           <section id="viewVersion" class="view-panel">
-            <div class="card">
+            <!-- 1. Version Editor Form -->
+            <div class="card" id="cardVersionEditor">
               <div class="card-header">
                 <div class="card-title-group">
                   <span class="card-icon">🚀</span>
                   <div>
-                    <h2>จัดการเวอร์ชันและบังคับอัปเดต (Version & Force Update)</h2>
-                    <p class="card-desc">ควบคุมเวอร์ชันของตัวโปรแกรม NK Desktop และสั่งบังคับอัปเดตเครื่องที่เวอร์ชันเก่า</p>
+                    <h2 id="versionFormTitle">กำหนดข้อมูลเวอร์ชัน (Version Editor)</h2>
+                    <p class="card-desc">กรอกรายละเอียดเวอร์ชันใหม่ หรือเลือกแก้ไขจากตารางด้านล่าง จากนั้นกดบันทึกหรือเผยแพร่</p>
                   </div>
+                </div>
+                <div id="versionEditNotice" class="hidden" style="display: inline-flex; align-items: center; gap: 8px; background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.35); padding: 5px 12px; border-radius: 20px; font-size: 12px; color: #93c5fd;">
+                  <span>✏️ กำลังแก้ไข: <b id="lblEditingVersion">-</b></span>
+                  <button type="button" id="btnCancelEditNotice" style="background: none; border: none; color: #f87171; cursor: pointer; font-weight: 700; padding: 0 4px;" title="ยกเลิกการแก้ไข">✕</button>
                 </div>
               </div>
 
               <div class="card-body">
                 <div class="form-row">
                   <div class="form-group">
-                    <label for="latestVersion">เลขเวอร์ชันล่าสุด (Latest Version)</label>
-                    <input type="text" id="latestVersion" placeholder="3.6.0" style="font-weight: 700; color: #38ef7d;">
+                    <label for="latestVersion">เลขเวอร์ชัน (Version Number)</label>
+                    <input type="text" id="latestVersion" placeholder="3.8.10" style="font-weight: 700; color: #38ef7d;">
                   </div>
                   <div class="form-group">
                     <label for="minSupportedVersion">เวอร์ชันขั้นต่ำที่ยอมรับ (Min Version)</label>
-                    <input type="text" id="minSupportedVersion" placeholder="3.5.0">
+                    <input type="text" id="minSupportedVersion" placeholder="3.8.10">
                   </div>
                   <div class="form-group flex-center-col">
                     <label>บังคับอัปเดตทันที (Force Update)</label>
@@ -345,50 +346,9 @@
                 </div>
 
                 <div class="form-group">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
-                    <label for="downloadUrl" style="margin-bottom: 0;">ลิงก์ดาวน์โหลดไฟล์ติดตั้ง (.exe Installer URL)</label>
-                    <div>
-                      <input type="file" id="fileInstallerUpload" accept=".exe,.msi,.zip,.rar" style="display: none;">
-                      <button type="button" id="btnTriggerUpload" class="btn btn-outline" style="padding: 6px 14px; font-size: 0.85rem; border-color: #38ef7d; color: #38ef7d; border-radius: 8px; font-weight: 600;">
-                        <span>📤 อัปโหลดไฟล์เข้าฐานข้อมูล (.exe)</span>
-                      </button>
-                    </div>
-                  </div>
+                  <label for="downloadUrl">ลิงก์ดาวน์โหลดไฟล์ติดตั้ง (.exe Installer URL)</label>
                   <input type="url" id="downloadUrl" placeholder="https://web-production-eaa42d1.up.railway.app/api/download/installer">
-                  
-                  <!-- Live Upload Progress Bar -->
-                  <div id="uploadProgressContainer" class="hidden" style="margin-top: 10px; padding: 12px; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(56, 239, 125, 0.3); border-radius: 8px;">
-                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #cbd5e1; margin-bottom: 6px;">
-                      <span id="uploadProgressText">⏳ กำลังอัปโหลดไฟล์...</span>
-                      <span id="uploadProgressPercent" style="font-weight: 700; color: #38ef7d;">0%</span>
-                    </div>
-                    <div style="width: 100%; height: 8px; background: rgba(255, 255, 255, 0.1); border-radius: 4px; overflow: hidden;">
-                      <div id="uploadProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #11998e, #38ef7d); transition: width 0.15s ease;"></div>
-                    </div>
-                  </div>
-
-                  <!-- Database File Info Badge -->
-                  <div id="fileDatabaseBadge" class="hidden" style="margin-top: 10px; padding: 10px 14px; background: rgba(56, 239, 125, 0.08); border: 1px solid rgba(56, 239, 125, 0.3); border-radius: 8px; font-size: 0.85rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                      <span style="color: #38ef7d; font-size: 1.15rem;">💾</span>
-                      <div>
-                        <div style="font-weight: 600; color: #f8fafc;">
-                          <span>ไฟล์ในฐานข้อมูล: </span>
-                          <span id="lblDbFileName" style="color: #38ef7d;">-</span>
-                        </div>
-                        <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">
-                          <span>ขนาด: </span><span id="lblDbFileSize">-</span>
-                          <span style="margin: 0 4px;">•</span>
-                          <span>อัปโหลดเมื่อ: </span><span id="lblDbFileDate">-</span>
-                        </div>
-                      </div>
-                    </div>
-                    <a id="btnTestDownload" href="/api/download/installer" target="_blank" class="btn btn-outline" style="padding: 5px 12px; font-size: 0.8rem; text-decoration: none; border-radius: 6px;">
-                      <span>📥 ทดสอบดาวน์โหลด</span>
-                    </a>
-                  </div>
-
-                  <small class="form-help">💡 สามารถคลิกปุ่ม <b>"📤 อัปโหลดไฟล์เข้าฐานข้อมูล"</b> เพื่อนำไฟล์ .exe ไปบันทึกเก็บไว้ใน PostgreSQL หรือพิมพ์ลิงก์ดาวน์โหลดภายนอกได้</small>
+                  <small class="form-help">💡 สามารถเลือกใช้ลิงก์จาก "ตารางไฟล์ตัวติดตั้งในฐานข้อมูล" ด้านล่าง หรือกรอก URL ภายนอกได้</small>
                 </div>
 
                 <div class="form-group">
@@ -396,10 +356,111 @@
                   <textarea id="releaseNotes" rows="3" placeholder="ระบุสิ่งที่ได้รับการปรับปรุงหรือแก้ไขในเวอร์ชันนี้..."></textarea>
                 </div>
 
-                <div class="form-actions">
-                  <button id="btnSaveVersion" class="btn btn-primary">
-                    <span>💾 บันทึกข้อมูลเวอร์ชัน (Save Version)</span>
+                <!-- 3 Clear Action Buttons -->
+                <div class="form-actions" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                  <div>
+                    <button type="button" id="btnCancelEditVersion" class="btn btn-outline hidden">
+                      <span>✕ ยกเลิกการแก้ไข</span>
+                    </button>
+                  </div>
+                  <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <button type="button" id="btnSaveVersionDraft" class="btn btn-secondary">
+                      <span>💾 บันทึกแบบร่าง (Save Draft)</span>
+                    </button>
+                    <button type="button" id="btnPublishVersionNow" class="btn btn-primary" style="background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);">
+                      <span>🚀 เผยแพร่ทันที (Publish & Release)</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. Version History Table -->
+            <div class="card">
+              <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div class="card-title-group">
+                  <span class="card-icon">📋</span>
+                  <div>
+                    <h2>ตารางเวอร์ชันทั้งหมด (Version History Table)</h2>
+                    <p class="card-desc">รายการเวอร์ชันในระบบ พร้อมสถานะการเผยแพร่ สามารถแก้ไข หรือกดเผยแพร่ให้ผู้ใช้ทุกคนได้ทันที</p>
+                  </div>
+                </div>
+                <button type="button" id="btnNewVersion" class="btn btn-outline" style="font-size: 12.5px; padding: 6px 14px;">
+                  <span>➕ สร้างเวอร์ชันใหม่</span>
+                </button>
+              </div>
+
+              <div class="card-body" style="padding: 0;">
+                <div class="table-responsive">
+                  <table class="clients-table" id="tableVersionHistory">
+                    <thead>
+                      <tr>
+                        <th>เลขเวอร์ชัน</th>
+                        <th>ขั้นต่ำที่ยอมรับ</th>
+                        <th>การบังคับอัปเดต</th>
+                        <th>รายละเอียด (Release Notes)</th>
+                        <th>สถานะ</th>
+                        <th>วันที่บันทึก / เผยแพร่</th>
+                        <th style="text-align: right;">การจัดการ</th>
+                      </tr>
+                    </thead>
+                    <tbody id="versionHistoryTableBody">
+                      <tr>
+                        <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">กำลังโหลดตารางเวอร์ชัน...</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. Uploaded Files Table -->
+            <div class="card">
+              <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div class="card-title-group">
+                  <span class="card-icon">📦</span>
+                  <div>
+                    <h2>ตารางแสดงไฟล์ตัวติดตั้งในฐานข้อมูล (Uploaded Installer Files)</h2>
+                    <p class="card-desc">รายการไฟล์ .exe ที่เคยอัปโหลดและจัดเก็บถาวรใน PostgreSQL สามารถทดสอบดาวน์โหลด นำลิงก์ไปใช้ หรือลบไฟล์ได้</p>
+                  </div>
+                </div>
+                <div>
+                  <input type="file" id="fileInstallerUpload" accept=".exe,.msi,.zip,.rar" style="display: none;">
+                  <button type="button" id="btnTriggerUpload" class="btn btn-primary" style="padding: 7px 16px; font-size: 0.85rem; font-weight: 600;">
+                    <span>📤 อัปโหลดไฟล์ใหม่ (.exe)</span>
                   </button>
+                </div>
+              </div>
+
+              <!-- Live Upload Progress Bar -->
+              <div id="uploadProgressContainer" class="hidden" style="margin: 16px 20px 0 20px; padding: 12px; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(56, 239, 125, 0.3); border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.85rem; color: #cbd5e1; margin-bottom: 6px;">
+                  <span id="uploadProgressText">⏳ กำลังอัปโหลดไฟล์...</span>
+                  <span id="uploadProgressPercent" style="font-weight: 700; color: #38ef7d;">0%</span>
+                </div>
+                <div style="width: 100%; height: 8px; background: rgba(255, 255, 255, 0.1); border-radius: 4px; overflow: hidden;">
+                  <div id="uploadProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #11998e, #38ef7d); transition: width 0.15s ease;"></div>
+                </div>
+              </div>
+
+              <div class="card-body" style="padding: 0; margin-top: 14px;">
+                <div class="table-responsive">
+                  <table class="clients-table" id="tableInstallerFiles">
+                    <thead>
+                      <tr>
+                        <th>ชื่อไฟล์ (Filename)</th>
+                        <th>ขนาดไฟล์ (Size)</th>
+                        <th>วันที่อัปโหลด</th>
+                        <th>สถานะการใช้งาน</th>
+                        <th style="text-align: right;">การจัดการ</th>
+                      </tr>
+                    </thead>
+                    <tbody id="installerFilesTableBody">
+                      <tr>
+                        <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 24px;">กำลังโหลดรายการไฟล์...</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

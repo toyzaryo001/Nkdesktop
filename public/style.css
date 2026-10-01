@@ -896,6 +896,69 @@ input:checked + .slider:before {
   font-weight: 600;
 }
 
+.badge-version {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #38ef7d;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-family: monospace;
+  font-size: 12.5px;
+}
+
+.badge-published {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.badge-draft {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fbbf24;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.badge-active-file {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.badge-stored {
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #94a3b8;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -909,6 +972,34 @@ input:checked + .slider:before {
   cursor: pointer;
   border: none;
   transition: all 0.2s ease;
+}
+
+.btn-secondary {
+  background: #334155;
+  color: #f8fafc;
+  border: 1px solid #475569;
+}
+
+.btn-secondary:hover {
+  background: #475569;
+  color: #fff;
+}
+
+.btn-xs {
+  padding: 4px 10px;
+  font-size: 11.5px;
+  border-radius: 6px;
+  gap: 4px;
+}
+
+.btn-success {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+}
+
+.btn-success:hover {
+  background: linear-gradient(135deg, #059669, #047857);
 }
 
 .btn-primary {
@@ -997,6 +1088,23 @@ input:checked + .slider:before {
 @keyframes slideIn {
   from { transform: translateX(100%); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
 }
 
 /* Responsive Styles */
