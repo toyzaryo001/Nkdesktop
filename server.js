@@ -698,7 +698,8 @@ app.post('/api/app-forms', async (req, res) => {
     }
 
     // Broadcast to all connected desktop apps
-    broadcastToClients({ type: 'FORMS_CHANGED', forms: appConfig.formTemplates });
+    broadcastToDesktops({ type: 'FORMS_CHANGED', forms: appConfig.formTemplates });
+    broadcastToAdmins({ type: 'FORMS_CHANGED', forms: appConfig.formTemplates });
     
     res.json({ success: true, forms: appConfig.formTemplates });
   } else {
