@@ -672,6 +672,40 @@ function requireAuth(req, res, next) {
 
 // ==== Public Endpoints for NK-Desktop Clients ====
 
+// --- Forms Sync Endpoints ---
+app.get('/api/app-forms', (req, res) => {
+  res.json({
+    success: true,
+    forms: appConfig.formTemplates || []
+  });
+});
+
+app.post('/api/app-forms', async (req, res) => {
+  const { forms } = req.body || {};
+  if (Array.isArray(forms)) {
+    appConfig.formTemplates = forms;
+    appConfig.updatedAt = new Date().toISOString();
+    
+    // Save to DB (Fire and forget, but wait for DB)
+    try {
+      await dbPool.query(
+        `INSERT INTO system_config (id, config_data) VALUES ('global_config', $1) 
+         ON CONFLICT (id) DO UPDATE SET config_data = $1;`,
+        [JSON.stringify(appConfig)]
+      );
+    } catch (e) {
+      console.error('Error saving forms to DB:', e);
+    }
+
+    // Broadcast to all connected desktop apps
+    broadcastToClients({ type: 'FORMS_CHANGED', forms: appConfig.formTemplates });
+    
+    res.json({ success: true, forms: appConfig.formTemplates });
+  } else {
+    res.status(400).json({ success: false, error: 'Invalid format. Expected array.' });
+  }
+});
+
 // 1. App Control Config (NK Desktop polls this)
 app.get('/api/app-control', (req, res) => {
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
