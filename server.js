@@ -304,6 +304,20 @@ async function initDatabase() {
         );
       `);
 
+      // 4. Create table for cohort data
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS cohort_reports (
+          id SERIAL PRIMARY KEY,
+          website_id VARCHAR(100),
+          target_month VARCHAR(20),
+          total_users INT,
+          returned_users INT,
+          total_deposit NUMERIC,
+          raw_data JSONB,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
       console.log('✅ PostgreSQL connected and tables verified.');
 
       // Load config from DB if exists
@@ -704,6 +718,30 @@ app.post('/api/app-forms', async (req, res) => {
     res.json({ success: true, forms: appConfig.formTemplates });
   } else {
     res.status(400).json({ success: false, error: 'Invalid format. Expected array.' });
+  }
+});
+
+// --- Cohort Sync Endpoint ---
+app.post('/api/cohort-sync', async (req, res) => {
+  const { websiteId, targetMonth, totalUsers, returnedUsers, totalDeposit, rawData } = req.body || {};
+  if (!targetMonth || !rawData) {
+    return res.status(400).json({ success: false, error: 'Missing targetMonth or rawData' });
+  }
+
+  try {
+    if (dbPool) {
+      // Upsert based on websiteId and targetMonth
+      // Wait, there's no unique constraint, so we just insert for now, or delete first.
+      await dbPool.query(`DELETE FROM cohort_reports WHERE website_id = $1 AND target_month = $2`, [websiteId || 'default', targetMonth]);
+      await dbPool.query(`
+        INSERT INTO cohort_reports (website_id, target_month, total_users, returned_users, total_deposit, raw_data)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `, [websiteId || 'default', targetMonth, totalUsers || 0, returnedUsers || 0, totalDeposit || 0, JSON.stringify(rawData)]);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error saving cohort to DB:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
