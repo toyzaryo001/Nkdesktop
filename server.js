@@ -160,6 +160,7 @@ const DEFAULT_CONFIG = {
     type: 'info', // 'info' | 'warning' | 'danger'
     message: ''
   },
+  formTemplates: [],
   updatedAt: new Date().toISOString(),
   updatedBy: 'system'
 };
@@ -328,6 +329,9 @@ async function initDatabase() {
           try { loaded = JSON.parse(loaded); } catch (e) {}
         }
         appConfig = { ...DEFAULT_CONFIG, ...loaded };
+        if (!Array.isArray(appConfig.formTemplates)) {
+          appConfig.formTemplates = loaded?.formTemplates || [];
+        }
         saveConfigFile(appConfig);
         console.log('✅ Synchronized latest app_config from PostgreSQL.');
       } else {
@@ -336,6 +340,24 @@ async function initDatabase() {
           [JSON.stringify(appConfig)]
         );
         console.log('✅ Seeded initial app_config into PostgreSQL.');
+      }
+
+      // Also ensure form_templates table/key check for maximum persistence
+      try {
+        const formsRes = await client.query(`SELECT value FROM system_config WHERE key = 'form_templates' LIMIT 1;`);
+        if (formsRes.rows.length > 0 && formsRes.rows[0].value) {
+          let loadedForms = formsRes.rows[0].value;
+          if (typeof loadedForms === 'string') {
+            try { loadedForms = JSON.parse(loadedForms); } catch (e) {}
+          }
+          if (Array.isArray(loadedForms) && loadedForms.length > 0) {
+            appConfig.formTemplates = loadedForms;
+            saveConfigFile(appConfig);
+            console.log(`✅ Loaded ${loadedForms.length} form templates from PostgreSQL.`);
+          }
+        }
+      } catch (errForms) {
+        console.warn('Notice loading form_templates from DB:', errForms.message);
       }
 
       // Load master admin auth from DB (Check system_config first, then fallback to most recent admin_auth)
@@ -687,7 +709,24 @@ function requireAuth(req, res, next) {
 // ==== Public Endpoints for NK-Desktop Clients ====
 
 // --- Forms Sync Endpoints ---
-app.get('/api/app-forms', (req, res) => {
+app.get('/api/app-forms', async (req, res) => {
+  // If in-memory is empty and dbPool is available, try loading from PostgreSQL
+  if (dbPool && (!Array.isArray(appConfig.formTemplates) || appConfig.formTemplates.length === 0)) {
+    try {
+      const formsRes = await dbPool.query(`SELECT value FROM system_config WHERE key = 'form_templates' LIMIT 1;`);
+      if (formsRes.rows.length > 0 && formsRes.rows[0].value) {
+        let loadedForms = formsRes.rows[0].value;
+        if (typeof loadedForms === 'string') {
+          try { loadedForms = JSON.parse(loadedForms); } catch (e) {}
+        }
+        if (Array.isArray(loadedForms) && loadedForms.length > 0) {
+          appConfig.formTemplates = loadedForms;
+        }
+      }
+    } catch (e) {}
+  }
+
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.json({
     success: true,
     forms: appConfig.formTemplates || []
@@ -695,21 +734,62 @@ app.get('/api/app-forms', (req, res) => {
 });
 
 app.post('/api/app-forms', async (req, res) => {
-  const { forms } = req.body || {};
-  if (Array.isArray(forms)) {
-    appConfig.formTemplates = forms;
-    appConfig.updatedAt = new Date().toISOString();
-    
-    // Save to DB and Disk
-    saveConfig(appConfig).catch(e => console.error('Error saving forms to DB:', e));
+  try {
+    const { forms, action, form, formId } = req.body || {};
 
-    // Broadcast to all connected desktop apps
+    if (!Array.isArray(appConfig.formTemplates)) {
+      appConfig.formTemplates = [];
+    }
+
+    if (action === 'upsert' && form && form.id) {
+      // Upsert a single form without wiping out forms created by others
+      const idx = appConfig.formTemplates.findIndex(f => f.id === form.id);
+      if (idx > -1) {
+        appConfig.formTemplates[idx] = form;
+      } else {
+        appConfig.formTemplates.push(form);
+      }
+    } else if (action === 'delete' && (formId || form?.id)) {
+      const targetId = formId || form?.id;
+      appConfig.formTemplates = appConfig.formTemplates.filter(f => f.id !== targetId);
+    } else if (Array.isArray(forms)) {
+      // Direct array replacement / batch save
+      appConfig.formTemplates = forms;
+    } else {
+      return res.status(400).json({ success: false, error: 'Invalid parameters for app-forms' });
+    }
+
+    appConfig.updatedAt = new Date().toISOString();
+
+    // 1. Save to control-config.json and PostgreSQL app_config
+    await saveConfig(appConfig);
+
+    // 2. Also save to dedicated key in PostgreSQL for maximum durability
+    if (dbPool) {
+      try {
+        await dbPool.query(
+          `INSERT INTO system_config (key, value, updated_at) VALUES ('form_templates', $1, NOW())
+           ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW();`,
+          [JSON.stringify(appConfig.formTemplates)]
+        );
+      } catch (e) {
+        console.error('Error saving form_templates to PostgreSQL:', e.message);
+      }
+    }
+
+    // 3. Real-time broadcast to ALL connected desktop apps and admin sockets
     broadcastToDesktops({ type: 'FORMS_CHANGED', forms: appConfig.formTemplates });
     broadcastToAdmins({ type: 'FORMS_CHANGED', forms: appConfig.formTemplates });
-    
-    res.json({ success: true, forms: appConfig.formTemplates });
-  } else {
-    res.status(400).json({ success: false, error: 'Invalid format. Expected array.' });
+
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    return res.json({
+      success: true,
+      forms: appConfig.formTemplates,
+      message: 'บันทึกแบบฟอร์มเรียบร้อยและซิงค์ไปยังทุกเครื่องแล้ว'
+    });
+  } catch (err) {
+    console.error('Error in /api/app-forms:', err);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
