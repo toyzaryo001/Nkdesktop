@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NK Helper — เข้าสู่ระบบ</title>
+  <link rel="stylesheet" href="login.css">
+</head>
+<body>
+  <div class="window-frame">
+    <div class="drag-bar">
+      <div class="brand">
+        <span class="logo-badge">NK</span>
+        <span class="app-title">NK BackOffice Helper</span>
+      </div>
+      <div class="window-controls">
+        <button id="btnMin" class="ctrl-btn" title="ย่อ">−</button>
+        <button id="btnClose" class="ctrl-btn close" title="ปิด">✕</button>
+      </div>
+    </div>
+
+    <div class="login-container">
+      <!-- Phase 1: Credentials Form -->
+      <div id="phaseCredentials" class="login-phase phase-active">
+        <div class="hero-section">
+          <div class="logo-glow">NK</div>
+          <h1>เข้าสู่ระบบ</h1>
+          <p id="loginAppVersion">NK Helper Desktop v3.8.3 (Enterprise Online)</p>
+        </div>
+
+        <form id="loginForm" class="login-form">
+          <div class="form-group">
+            <label for="username">ชื่อผู้ใช้ (Username)</label>
+            <div class="input-wrap">
+              <span class="icon">👤</span>
+              <input type="text" id="username" placeholder="กรอกชื่อผู้ใช้" required autofocus autocomplete="username">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="password">รหัสผ่าน (Password)</label>
+            <div class="input-wrap">
+              <span class="icon">🔒</span>
+              <input type="password" id="password" placeholder="กรอกรหัสผ่าน" required autocomplete="current-password">
+            </div>
+          </div>
+
+          <div id="errorMsg" class="error-banner" style="display: none;"></div>
+
+          <button type="submit" id="btnLogin" class="btn-primary">
+            <span>เข้าสู่ระบบ</span>
+            <span class="arrow">→</span>
+          </button>
+
+          <div class="login-hint">
+            💡 เข้าสู่ระบบด้วยบัญชีผู้ใช้ <b>NK BackOffice</b> ของคุณ
+          </div>
+        </form>
+      </div>
+
+      <!-- Phase 2: 2FA Authenticator Switch -->
+      <div id="phase2FA" class="login-phase" style="display: none;">
+        <div class="hero-section">
+          <div class="logo-glow" style="background: radial-gradient(circle at 35% 30%, #34d399, #059669 60%, #065f46); box-shadow: 0 0 35px rgba(16, 185, 129, 0.35);">🔐</div>
+          <h1>ยืนยันตัวตน 2 ชั้น</h1>
+          <div class="user-chip-wrap" style="display:flex; justify-content:center; align-items:center; gap:6px; margin-top:6px;">
+            <div class="user-chip" style="display:inline-flex; align-items:center; gap:6px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); padding:3px 12px; border-radius:20px; font-size:12px; color:#e2e8f0;">
+              <span>👤</span>
+              <strong id="label2FAUsername">แอดมิน</strong>
+            </div>
+          </div>
+        </div>
+
+        <form id="form2FA" class="login-form">
+          <div class="form-group">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <label for="otp" style="color:#10b981; font-weight:700;">รหัสยืนยันจาก Authenticator</label>
+              <span style="font-size:10.5px; color:#10b981; font-weight:600; background:rgba(16,185,129,0.12); padding:1px 6px; border-radius:10px; border:1px solid rgba(16,185,129,0.3);">2FA Active</span>
+            </div>
+            <div class="input-wrap">
+              <span class="icon">📱</span>
+              <input type="text" id="otp" placeholder="000000" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" style="letter-spacing:8px; font-weight:800; font-size:20px; text-align:center;">
+            </div>
+            <div style="font-size:11.5px; color:#94a3b8; text-align:center; margin-top:2px;">
+              เปิดแอป Authenticator บนมือถือแล้วกรอกรหัส 6 หลัก
+            </div>
+          </div>
+
+          <div id="error2FA" class="error-banner" style="display: none;"></div>
+
+          <button type="submit" id="btnSubmit2FA" class="btn-primary" style="background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);">
+            <span>ยืนยันและเข้าสู่ระบบ</span>
+            <span class="arrow">→</span>
+          </button>
+
+          <div style="text-align:center; margin-top:8px;">
+            <a href="#" id="btnBackToLogin" style="font-size:12px; color:#94a3b8; text-decoration:none; display:inline-flex; align-items:center; gap:4px; transition:color 0.2s;">
+              <span>← ย้อนกลับไปแก้ไขรหัสผ่าน</span>
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Remote Lockout Overlay -->
+    <div id="remoteLockoutOverlay" style="display:none; position:absolute; top:36px; left:0; right:0; bottom:0; background:rgba(15, 23, 42, 0.97); z-index:999; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px;">
+      <div style="font-size:42px; margin-bottom:12px;">🛑</div>
+      <h2 id="lockoutTitle" style="font-size:18px; color:#f87171; font-weight:700; margin-bottom:8px;">ระบบปิดปรับปรุงชั่วคราว</h2>
+      <p id="lockoutMessage" style="font-size:12.5px; color:#cbd5e1; line-height:1.5; margin-bottom:16px;">ขณะนี้ระบบ NK Helper อยู่ระหว่างการปรับปรุงระบบเพื่อความเสถียร กรุณารอสักครู่หรือติดต่อแอดมิน</p>
+      <div id="lockoutContact" style="font-size:11.5px; color:#94a3b8; background:rgba(255,255,255,0.06); padding:8px 14px; border-radius:6px; border:1px solid #334155;">ติดต่อ: ผู้ดูแลระบบ</div>
+    </div>
+
+    <!-- Force Update Overlay -->
+    <div id="remoteForceUpdateOverlay" style="display:none; position:absolute; top:36px; left:0; right:0; bottom:0; background:rgba(15, 23, 42, 0.97); z-index:998; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:24px;">
+      <div style="font-size:42px; margin-bottom:12px;">🚀</div>
+      <h2 style="font-size:18px; color:#60a5fa; font-weight:700; margin-bottom:8px;">จำเป็นต้องอัปเดตเวอร์ชัน</h2>
+      <p style="font-size:12.5px; color:#cbd5e1; margin-bottom:12px;">มีเวอร์ชันใหม่ออกมา กรุณาอัปเดตเพื่อใช้งานต่อ</p>
+      <div id="updateVerNotice" style="font-size:12px; color:#10b981; font-weight:600; margin-bottom:16px;"></div>
+      <button type="button" id="btnDownloadUpdateLogin" class="btn-primary" style="margin-top:0; width:100%;">
+        <span>📥 ดาวน์โหลดอัปเดต (.exe)</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal: Modern System Dialog (Replacement for window.confirm & window.alert) -->
+  <div id="modalModernDialog" class="modern-dialog-overlay" style="display:none;">
+    <div class="modern-dialog-card" id="modernDialogCard">
+      <div id="modernDialogGlow" class="modern-dialog-glow"></div>
+      <div id="modernDialogIconWrap" class="modern-dialog-icon-wrap">
+        <span id="modernDialogIcon" class="modern-dialog-icon">⚠️</span>
+      </div>
+      <h3 id="modernDialogTitle" class="modern-dialog-title">แจ้งเตือน</h3>
+      <div id="modernDialogMessage" class="modern-dialog-message"></div>
+      <div class="modern-dialog-actions">
+        <button type="button" id="btnModernDialogCancel" class="modern-dialog-btn modern-dialog-btn-cancel">ยกเลิก</button>
+        <button type="button" id="btnModernDialogConfirm" class="modern-dialog-btn modern-dialog-btn-confirm">ตกลง</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="login.js"></script>
+</body>
+</html>
+

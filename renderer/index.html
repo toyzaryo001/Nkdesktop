@@ -1,0 +1,2651 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NK BackOffice Helper v3.8.33</title>
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body>
+  <!-- Custom Window Frame Header -->
+  <header class="titlebar">
+    <div class="titlebar-brand">
+      <span class="brand-badge">NK</span>
+      <span class="titlebar-title">BackOffice Helper Desktop</span>
+      <span class="version-tag" id="appVersionTag">v3.8.33</span>
+    </div>
+    <div class="titlebar-actions">
+      <div id="remoteControlPill" class="session-status" style="display:inline-flex; align-items:center; gap:6px; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); color:#10b981; padding:3px 10px; border-radius:20px; font-size:11.5px; font-weight:600;" title="สถานะเชื่อมต่อศูนย์ควบคุมออนไลน์ Railway">
+        <span style="width:7px; height:7px; border-radius:50%; background-color:currentColor; box-shadow:0 0 6px currentColor;"></span>
+        <span id="remoteControlPillText">ควบคุมออนไลน์</span>
+      </div>
+      <div id="sessionIndicator" class="session-status" title="สถานะ API Session">
+        <span class="status-dot" id="sessionDot"></span>
+        <span id="sessionText">ตรวจจับ Session...</span>
+      </div>
+      <button id="btnThemeToggle" class="theme-toggle-btn" title="สลับโหมด กลางวัน / กลางคืน">🌙</button>
+      <div class="window-btns">
+        <button id="btnMinimize" class="w-btn" title="ย่อ">−</button>
+        <button id="btnMaximize" class="w-btn" title="ขยาย">□</button>
+        <button id="btnCloseApp" class="w-btn close" title="ปิด">✕</button>
+      </div>
+    </div>
+  </header>
+
+    <!-- Main Layout -->
+    <div class="main-layout">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <nav class="nav-menu">
+          <div class="nav-item active" data-view="dashboard">
+            <span class="icon">📊</span>
+            <span>ภาพรวม</span>
+          </div>
+          <div class="nav-item" data-view="notifications">
+            <span class="icon">🔔</span>
+            <span>แจ้งเตือน</span>
+            <span id="notifBadge" class="badge" style="display:none; background:var(--accent);">0</span>
+          </div>
+          <div class="nav-item" data-view="withdraw">
+            <span class="icon">💸</span>
+            <span>ถอนเงิน Standby</span>
+            <span id="withdrawBadge" class="badge" style="display:none;">0</span>
+          </div>
+          <div class="nav-item" data-view="member">
+            <span class="icon">👤</span>
+            <span>จัดการสมาชิก</span>
+          </div>
+          <div class="nav-item" data-view="cohort">
+            <span class="icon">👥</span>
+            <span>กลุ่มลูกค้า</span>
+          </div>
+          <div class="nav-item" data-view="reports">
+            <span class="icon">📑</span>
+            <span>ดึงรายงาน</span>
+          </div>
+          <div class="nav-item" data-view="analyzer">
+            <span class="icon">🔬</span>
+            <span>API Analyzer</span>
+          </div>
+          <div class="nav-item" data-view="settings">
+            <span class="icon">⚙️</span>
+            <span>ตั้งค่าระบบ</span>
+          </div>
+          <div class="nav-item" data-view="webview">
+            <span class="icon">🌐</span>
+            <span>เว็บ BackOffice</span>
+          </div>
+          <div class="nav-item" data-view="swiftpay-webview">
+            <span class="icon">💳</span>
+            <span>เว็บ SwiftPay</span>
+          </div>
+          <div class="nav-item" data-view="agent-webview">
+            <span class="icon">💼</span>
+            <span>เว็บ Agent</span>
+          </div>
+          <div class="nav-item" data-view="forms">
+            <span class="icon">📝</span>
+            <span>แบบฟอร์ม</span>
+          </div>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="user-card">
+            <div class="user-avatar" id="userAvatar">👑</div>
+            <div class="user-info">
+              <span id="txtUserName" class="user-name">แอดมิน</span>
+              <span id="txtUserRole" class="user-role">ผู้ดูแลระบบ</span>
+              <span id="txtUserSite" class="site-badge">-</span>
+            </div>
+          </div>
+          <button id="btnLogout" class="btn-logout">
+            <span>🚪</span>
+            <span>ออกจากระบบ</span>
+          </button>
+        </div>
+      </aside>
+
+      <!-- Content Views -->
+      <main class="content-area">
+        <!-- 1. DASHBOARD -->
+        <section id="view-dashboard" class="view-pane active">
+          <div class="view-header">
+            <div class="view-title">
+              <h1>ระบบภาพรวม (Dashboard)</h1>
+              <p>สถานะการทำงานของ NK Helper และบริการทั้งหมด</p>
+            </div>
+            <div class="header-actions">
+              <label class="switch-label">
+                <span>เปิดใช้งานตัวช่วย</span>
+                <input type="checkbox" id="masterSwitch" class="switch-input" checked>
+                <span class="switch-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="card-grid">
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">ถอนรอดำเนินการ</span>
+                <span>⏳</span>
+              </div>
+              <div id="dashPendingCount" class="card-value">0</div>
+              <div class="card-desc">รายการที่ต้องอนุมัติ</div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">ส่งต่อ CRS แล้ว</span>
+                <span>🔄</span>
+              </div>
+              <div id="dashCrsCount" class="card-value">0</div>
+              <div class="card-desc">รายการที่อนุมัติแล้วกำลังโอน</div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">AUTO APPROVE</span>
+                <span>⚡</span>
+              </div>
+              <div id="dashAutoStatus" class="card-value" style="font-size:20px; color:var(--text-dim);">ปิดอยู่</div>
+              <div id="dashAutoDesc" class="card-desc">ยอดสูงสุด 5,000 บาท</div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <span class="card-title">SERVER OBSERVER</span>
+                <span>🌐</span>
+              </div>
+              <div id="dashObserverStatus" class="card-value" style="font-size:20px; color:var(--success);">พร้อมใช้งาน</div>
+              <div class="card-desc">ตรวจเหตุการณ์ทุก 30 วินาที</div>
+            </div>
+          </div>
+
+          <div class="form-card">
+            <h3>⚡ การทำงานด่วน</h3>
+            <p style="color:var(--text-muted); font-size:12px; margin-top:4px; margin-bottom:16px;">กดเพื่อสลับไปยังหน้างานที่ต้องการทำทันที</p>
+            <div style="display:flex; gap:12px; flex-wrap:wrap;">
+              <button class="btn btn-secondary" onclick="window.navTo('withdraw')">💸 ดูรายการถอนเงิน</button>
+              <button class="btn btn-secondary" onclick="window.navTo('member')">👤 จัดการสมาชิก</button>
+              <button class="btn btn-secondary" onclick="window.navTo('reports')">📑 ดึงรายงานฝาก/โบนัส</button>
+              <button class="btn btn-secondary" onclick="window.navTo('swiftpay-webview')">💳 เปิดเว็บ SwiftPay</button>
+              <button class="btn btn-accent" onclick="window.navTo('webview')">🌐 เปิดหน้าเว็บ BackOffice</button>
+            </div>
+          </div>
+
+          <!-- 1.1 DAILY SUMMARY REPORT TABLE -->
+          <div class="card daily-report-card" id="cardDailyReport" style="margin-top: 24px;">
+            <div class="daily-report-header">
+              <div class="daily-report-title-box">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span style="font-size:22px;">📅</span>
+                  <div>
+                    <h3 style="margin:0; font-size:16px; font-weight:700; color:var(--text);" id="txtDailyReportTitle">ตารางสรุปยอดรายวัน</h3>
+                    <span style="font-size:12px; color:var(--text-muted);" id="txtDailyReportSubtitle">ข้อมูลบันทึกจริงถึงเมื่อวาน · ซิงค์อัตโนมัติทุกวันหลังเที่ยงคืน</span>
+                  </div>
+                </div>
+              </div>
+              <div class="daily-report-actions">
+                <div class="daily-month-select-wrapper">
+                  <label for="selDailyMonth" style="font-size:12px; color:var(--text-muted); margin-right:6px;">เดือน:</label>
+                  <select id="selDailyMonth" class="daily-select">
+                    <!-- Populated dynamically via JS -->
+                  </select>
+                </div>
+                <button id="btnDailyRefresh" class="btn btn-secondary btn-sm" title="ดึงข้อมูลล่าสุดจาก API">
+                  <span>🔄</span>
+                  <span>ดึงข้อมูลล่าสุด</span>
+                </button>
+                <button id="btnDailyExport" class="btn btn-secondary btn-sm" title="ดาวน์โหลดไฟล์ Excel (.xlsx)">
+                  <span>📥</span>
+                  <span>ส่งออก Excel</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Table Container with horizontal scroll -->
+            <div class="daily-table-responsive">
+              <table class="daily-table" id="dailyReportTable">
+                <thead>
+                  <tr class="daily-table-title-row">
+                    <th colspan="16" id="thDailySiteTitle">-</th>
+                  </tr>
+                  <tr class="daily-table-header-row">
+                    <th class="col-day">วันที่</th>
+                    <th>สมัครใหม่</th>
+                    <th>สมัครใหม่ฝากเงิน</th>
+                    <th>Active<br><span style="font-size:10px; font-weight:normal;">จำนวนคนใช้งาน</span></th>
+                    <th>คอมมิชชั่น</th>
+                    <th>เติม A</th>
+                    <th>ลด A</th>
+                    <th>ฝากโบนัส</th>
+                    <th>แนะนำเพื่อน</th>
+                    <th>คืนยอดเสีย</th>
+                    <th>กงล้อนำโชค</th>
+                    <th>รีวอร์ด</th>
+                    <th>ฝากเงิน</th>
+                    <th>ถอนเงิน</th>
+                    <th>กำไรขาดทุน</th>
+                    <th>สรุปรายได้</th>
+                  </tr>
+                </thead>
+                <tbody id="dailyReportTbody">
+                  <tr>
+                    <td colspan="16" style="text-align:center; padding:32px; color:var(--text-muted);">
+                      ⏳ กำลังเตรียมข้อมูลตารางสรุปรายวัน...
+                    </td>
+                  </tr>
+                </tbody>
+                <tfoot id="dailyReportTfoot">
+                  <!-- Generated dynamically in JS -->
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 1.5 NOTIFICATIONS LOG -->
+        <section id="view-notifications" class="view-pane">
+          <div class="view-header">
+            <div class="view-title">
+              <h1>ประวัติการแจ้งเตือน (Notifications Log)</h1>
+              <p>คอยแจ้งเตือนและบันทึกรายการฝากเงิน ถอนเงิน ปรับเครดิตมือ เติมโบนัส แลกแต้ม รีเซ็ตรหัสผ่าน และเปลี่ยนข้อมูลธนาคารลูกค้า</p>
+            </div>
+            <div class="header-actions">
+              <button id="btnRefreshNotif" class="btn btn-secondary">
+                <span>🔄</span>
+                <span>รีเฟรชข้อมูล</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Filter Controls Card -->
+          <div class="card notif-filter-card">
+            <!-- Row 1: Date Filter & Page Limit -->
+            <div class="filter-row">
+              <div class="filter-group">
+                <span class="filter-label">ช่วงเวลา:</span>
+                <div class="btn-group" id="notifDatePresets">
+                  <button type="button" class="btn-preset active" data-preset="today">วันนี้</button>
+                  <button type="button" class="btn-preset" data-preset="yesterday">เมื่อวาน</button>
+                  <button type="button" class="btn-preset" data-preset="custom">กำหนดวันเอง</button>
+                </div>
+              </div>
+
+              <div id="notifCustomDateWrap" class="filter-group" style="display:none; gap:6px; align-items:center;">
+                <input type="date" id="notifStartDate" class="input-field date-input" style="width:140px; height:34px;">
+                <span style="color:var(--text-muted); font-size:12px;">ถึง</span>
+                <input type="date" id="notifEndDate" class="input-field date-input" style="width:140px; height:34px;">
+                <button type="button" id="btnApplyCustomDate" class="btn btn-accent" style="height:34px; padding:0 12px; font-size:12px;">ค้นหา</button>
+              </div>
+
+              <div class="filter-group ml-auto" style="display:flex; align-items:center; gap:8px;">
+                <span class="filter-label">แสดงต่อหน้า:</span>
+                <select id="notifPageSize" class="select-field" style="width:115px; height:34px; font-size:12.5px;">
+                  <option value="50" selected>50 รายการ</option>
+                  <option value="100">100 รายการ</option>
+                  <option value="300">300 รายการ</option>
+                  <option value="500">500 รายการ</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Row 2: Category Filter & Search -->
+            <div class="filter-row notif-filter-row-2">
+              <div class="filter-group notif-categories" id="notifCategories">
+                <button type="button" class="btn-cat active" data-category="all">ทั้งหมด</button>
+                <button type="button" class="btn-cat" data-category="deposit">📥 ฝากเงิน</button>
+                <button type="button" class="btn-cat" data-category="withdraw">📤 ถอนเงิน</button>
+                <button type="button" class="btn-cat" data-category="manual">⚡ เครดิตมือ</button>
+                <button type="button" class="btn-cat" data-category="bonus">🎁 เติมโบนัส</button>
+                <button type="button" class="btn-cat" data-category="reward">💎 แลกแต้ม</button>
+                <button type="button" class="btn-cat" data-category="reset_password">🔑 รีรหัสผ่าน</button>
+                <button type="button" class="btn-cat" data-category="bank_change">🏦 เปลี่ยนธนาคาร</button>
+              </div>
+
+              <div class="filter-group ml-auto">
+                <input type="text" id="notifSearch" class="input-field" placeholder="🔍 ค้นหายูสเซอร์/ข้อมูล..." style="width:180px; height:34px; font-size:12px;">
+              </div>
+            </div>
+          </div>
+
+          <!-- Notification Log Table Card -->
+          <div class="card table-card" style="margin-top:14px;">
+            <div class="table-container notif-table-scroll">
+              <table id="tableNotifications" class="data-table">
+                <thead>
+                  <tr>
+                    <th style="width:140px;">เวลา</th>
+                    <th style="width:130px;">ประเภท</th>
+                    <th style="width:150px;">ยูสเซอร์ / สมาชิก</th>
+                    <th style="width:140px;">ยอดเงิน / ข้อมูล</th>
+                    <th style="width:120px;">ผู้ดำเนินการ</th>
+                    <th>รายละเอียด</th>
+                    <th style="width:90px;">สถานะ</th>
+                  </tr>
+                </thead>
+                <tbody id="notifTableBody">
+                  <tr>
+                    <td colspan="7" class="empty-state">กำลังโหลดข้อมูลประวัติการแจ้งเตือน...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div class="table-pagination">
+              <div class="pagination-info" id="notifPaginationInfo">
+                แสดง 0 - 0 จากทั้งหมด 0 รายการ
+              </div>
+              <div class="pagination-controls">
+                <button type="button" id="btnPrevNotifPage" class="btn btn-secondary" style="height:32px; font-size:12px;" disabled>◀ ก่อนหน้า</button>
+                <span class="page-indicator" id="notifPageIndicator">หน้า 1 / 1</span>
+                <button type="button" id="btnNextNotifPage" class="btn btn-secondary" style="height:32px; font-size:12px;" disabled>ถัดไป ▶</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. WITHDRAW STANDBY -->
+        <section id="view-withdraw" class="view-pane">
+          <div class="view-header">
+            <div class="view-title">
+              <h1>ถอนเงิน Standby & Auto Approve</h1>
+              <p>ตรวจจับรายการถอนแบบเรียลไทม์ พร้อมระบบอนุมัติอัตโนมัติที่ปลอดภัย</p>
+            </div>
+            <div class="header-actions" style="display:flex; gap:12px; align-items:center;">
+              <button id="btnWithdrawTick" class="btn btn-secondary">↻ ตรวจตอนนี้</button>
+              <button id="btnWithdrawToggle" class="btn btn-accent">▶ เริ่ม Standby</button>
+            </div>
+          </div>
+
+          <div class="form-card">
+            <div class="form-row" style="align-items:flex-end;">
+              <div class="form-group" style="max-width: 170px;">
+                <label>ยอดเริ่มส่ง (บาท)</label>
+                <input type="number" id="withdrawMinAmount" class="input-field" value="0" min="0" placeholder="เช่น 1000" title="ยอดขั้นต่ำที่จะส่งอนุมัติ (ต่ำกว่านี้ไม่ส่ง)">
+              </div>
+              <div class="form-group" style="max-width: 170px;">
+                <label>ยอดเกินนี้ไม่ส่ง (บาท)</label>
+                <input type="number" id="withdrawMaxAmount" class="input-field" value="5000" min="1" placeholder="เช่น 5000" title="ยอดสูงสุดที่จะส่งอนุมัติ (เกินกว่านี้ไม่ส่ง)">
+              </div>
+              <div class="form-group" style="max-width: 190px;">
+                <label>ส่งต่อเกตเวย์</label>
+                <select id="withdrawAutoProvider" class="select-field" title="เลือกเกตเวย์ผู้ให้บริการที่จะส่งคำสั่งอนุมัติไป">
+                  <option value="crs">🏢 CRS (ส่งเข้าคิว)</option>
+                  <option value="swiftpay">⚡ SwiftPay (อัตโนมัติ)</option>
+                </select>
+              </div>
+              <div class="form-group" style="max-width: 180px; padding-bottom: 8px;">
+                <label class="switch-label">
+                  <span style="font-weight:700; color:var(--accent);">Auto Approve</span>
+                  <input type="checkbox" id="withdrawAutoApproveToggle" class="switch-input">
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
+              <div style="margin-bottom:10px; display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#10b981; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.25); padding:6px 12px; border-radius:8px; font-weight:600;">
+                <span style="width:7px; height:7px; border-radius:50%; background:#10b981; box-shadow:0 0 6px #10b981;"></span>
+                <span>ตรวจจับเรียลไทม์ (Live 5s)</span>
+              </div>
+            </div>
+            <div id="withdrawStatusText" style="margin-top:12px; font-size:12px; color:var(--text-muted);">
+              สถานะ: หยุดอยู่
+            </div>
+          </div>
+
+          <h3 style="margin-top:24px; font-size:14px; color:var(--text-muted);">📋 รายการรอดำเนินการ (รออนุมัติ)</h3>
+          <div class="table-container">
+            <table class="data-table" id="tablePendingWithdraw">
+              <thead>
+                <tr>
+                  <th style="width:75px;">ID</th>
+                  <th style="width:130px;">ยูสเซอร์</th>
+                  <th style="width:130px;">ชื่อลูกค้า</th>
+                  <th style="width:110px;">ยอดถอน (บาท)</th>
+                  <th style="width:160px;">ความเสี่ยง</th>
+                  <th style="width:230px;">การจัดการ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="6" class="empty-state">ยังไม่มีรายการรอดำเนินการ</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 style="margin-top:24px; font-size:14px; color:var(--text-muted);">🔄 รายการที่อนุมัติแล้ว (ส่งต่อให้เกตเวย์ CRS / SwiftPay)</h3>
+          <div class="table-container">
+            <table class="data-table" id="tableCrsWithdraw">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>ยูสเซอร์</th>
+                  <th>ชื่อลูกค้า</th>
+                  <th>จำนวนเงิน (บาท)</th>
+                  <th>สถานะ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="5" class="empty-state">ไม่มีรายการที่กำลังส่งต่อเกตเวย์</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 3. UNIFIED MEMBER MANAGEMENT (Note, Reset Password, Points) -->
+        <section id="view-member" class="view-pane">
+          <div class="view-title">
+            <h1>👤 จัดการสมาชิก</h1>
+            <p>ค้นหาข้อมูลสมาชิกด้วย Username หรือ เบอร์โทรศัพท์ — Note, รีเซ็ตรหัสผ่าน และเช็คแต้มสะสม ครบจบในหน้าเดียว</p>
+          </div>
+
+          <!-- 2-Column Split Layout -->
+          <div class="member-split-layout">
+            <!-- LEFT COLUMN: Search & Actions -->
+            <div class="member-left-col">
+              <!-- 1. Search Box -->
+              <div class="card member-search-card">
+                <div class="card-header-simple">
+                  <span class="card-icon">🔍</span>
+                  <h3>ค้นหาสมาชิก</h3>
+                </div>
+                <form id="formMemberSearch" class="member-search-form">
+                  <div class="form-group">
+                    <label>Username หรือ เบอร์โทรศัพท์ (10 หลัก)</label>
+                    <div class="input-with-clear">
+                      <input type="text" id="inputMemberSearch" class="input-field" placeholder="วาง Username เช่น jga... หรือ เบอร์ 08..." autofocus required>
+                      <button type="button" id="btnClearMemberSearch" class="btn-clear-input" title="ล้างค่า" style="display:none;">✕</button>
+                    </div>
+                  </div>
+                  <div class="btn-row" style="display:flex; gap:8px; margin-top:10px;">
+                    <button type="submit" id="btnMemberSearchSubmit" class="btn btn-accent" style="flex:1;">
+                      <span id="memberSearchIcon">🔍</span>
+                      <span id="memberSearchText">ค้นหาข้อมูล</span>
+                    </button>
+                    <button type="button" id="btnMemberClearAll" class="btn btn-secondary">
+                      ล้างค่า
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              <!-- 2. Reset Password Box -->
+              <div class="card member-action-card" id="cardMemberResetPass">
+                <div class="card-header-simple">
+                  <span class="card-icon">🔐</span>
+                  <h3>รีเซ็ตรหัสผ่าน</h3>
+                </div>
+                <p style="font-size:11.5px; color:var(--text-muted); margin-top:2px; margin-bottom:12px;">
+                  ตั้งรหัสผ่านใหม่ให้กับสมาชิกที่กำลังเลือก
+                </p>
+                <form id="formDoReset">
+                  <div class="form-group">
+                    <label>รหัสผ่านใหม่</label>
+                    <div style="display:flex; gap:6px;">
+                      <input type="text" id="inputNewPass" class="input-field" placeholder="กรอกรหัสผ่านใหม่" required disabled>
+                      <button type="button" id="btnGenRandomPass" class="btn btn-secondary" style="white-space:nowrap; padding:0 10px; font-size:11px;" title="สุ่มรหัสผ่านอัตโนมัติ" disabled>
+                        🎲 สุ่มรหัส
+                      </button>
+                    </div>
+                  </div>
+                  <button type="submit" id="btnSubmitReset" class="btn btn-danger" style="width:100%; margin-top:10px;" disabled>
+                    🔒 ยืนยันเปลี่ยนรหัสผ่าน
+                  </button>
+                </form>
+              </div>
+
+              <!-- 3. Member Note Box -->
+              <div class="card member-action-card" id="cardMemberNote">
+                <div class="card-header-between" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <span class="card-icon">📋</span>
+                    <h3 style="font-size:13.5px; margin:0;">Note ข้อมูลสมาชิก</h3>
+                  </div>
+                  <button type="button" id="btnCopyNote" class="btn btn-secondary btn-sm" disabled>
+                    📄 คัดลอก Note
+                  </button>
+                </div>
+                <div id="noteContent" class="note-box" style="min-height:100px;">
+                  <span style="color:var(--text-dim); font-size:12px;">ค้นหาสมาชิกเพื่อสร้าง Note อัตโนมัติ</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- RIGHT COLUMN: Data Display -->
+            <div class="member-right-col">
+              <!-- 1. Member Profile Details -->
+              <div class="card member-profile-card" id="cardMemberProfile">
+                <div class="card-header-between" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="card-icon" style="font-size:18px;">🪪</span>
+                    <h3 style="font-size:15px; margin:0;">ข้อมูลบัญชีสมาชิก</h3>
+                  </div>
+                  <span id="memberProfileStatus" class="badge-status success" style="display:none;">● ใช้งานปกติ</span>
+                </div>
+
+                <div class="member-info-grid">
+                  <div class="info-cell">
+                    <span class="info-label">ยูสเซอร์เนม (Username)</span>
+                    <strong class="info-val text-accent" id="profUsername">-</strong>
+                  </div>
+                  <div class="info-cell">
+                    <span class="info-label">ชื่อ - นามสกุล</span>
+                    <strong class="info-val" id="profName">-</strong>
+                  </div>
+                  <div class="info-cell">
+                    <span class="info-label">เบอร์โทรศัพท์</span>
+                    <strong class="info-val" id="profPhone">-</strong>
+                  </div>
+                  <div class="info-cell">
+                    <span class="info-label">ธนาคาร & เลขที่บัญชี</span>
+                    <strong class="info-val" id="profBank">-</strong>
+                  </div>
+                  <div class="info-cell">
+                    <span class="info-label">ผู้แนะนำ / พันธมิตร</span>
+                    <span class="info-val" id="profReferrer">-</span>
+                  </div>
+                  <div class="info-cell">
+                    <span class="info-label">รหัสสมาชิก (Member ID)</span>
+                    <span class="info-val" id="profMemberId">-</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 2. Points & Credit Summary -->
+              <div class="card member-points-card" id="cardMemberPoints">
+                <div class="card-header-between" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span class="card-icon" style="font-size:18px;">💎</span>
+                    <h3 style="font-size:15px; margin:0;">แต้มสะสม & รางวัล (Points)</h3>
+                  </div>
+                  <span id="ptsSyncTime" style="font-size:11px; color:var(--text-dim);">-</span>
+                </div>
+
+                <div class="points-stats-grid">
+                  <div class="points-stat-item">
+                    <span class="pts-stat-title">แต้มคงเหลือปัจจุบัน</span>
+                    <div class="pts-stat-val text-accent" id="ptsCurrentBalance">0</div>
+                    <small class="pts-stat-sub" id="ptsUserLabel">-</small>
+                  </div>
+                  <div class="points-stat-item">
+                    <span class="pts-stat-title">แต้มที่แลกสำเร็จแล้ว</span>
+                    <div class="pts-stat-val text-success" id="ptsSpent">0</div>
+                    <small class="pts-stat-sub">แต้มรวมที่ใช้ไป</small>
+                  </div>
+                  <div class="points-stat-item">
+                    <span class="pts-stat-title">เครดิตที่ได้รับ</span>
+                    <div class="pts-stat-val text-blue" id="ptsCreditReceived">฿0</div>
+                    <small class="pts-stat-sub">เครดิตที่อนุมัติ</small>
+                  </div>
+                </div>
+
+                <!-- Points History Table -->
+                <div class="points-history-section">
+                  <div class="points-history-header">
+                    <span class="points-history-title">📜 ประวัติการขอแลกแต้ม</span>
+                    <span id="ptsTxCount" class="points-history-count">0 รายการ</span>
+                  </div>
+                  <div class="table-wrap member-points-table-wrap">
+                    <table class="data-table member-points-table" id="tablePointsHistory">
+                      <thead>
+                        <tr>
+                          <th style="width:125px;">วันที่ทำรายการ</th>
+                          <th>รายการของรางวัล</th>
+                          <th style="width:80px;">แต้มที่ใช้</th>
+                          <th style="width:85px;">เครดิตที่ได้</th>
+                          <th style="width:90px;">ผู้อนุมัติ</th>
+                          <th style="width:75px; text-align:center;">สถานะ</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td colspan="6" class="empty-state">ยังไม่มีข้อมูลประวัติแต้ม (ค้นหาสมาชิกเพื่อดูข้อมูล)</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5.5 CUSTOMER COHORT RETENTION -->
+        <section id="view-cohort" class="view-pane">
+          <div class="view-title">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+              <div>
+                <h1>👥 วิเคราะห์กลุ่มลูกค้า (Customer Retention & Cohort)</h1>
+                <p id="cohortSubtitle" style="color:var(--text-muted); font-size:13px; margin:4px 0 0 0;">
+                  แบ่งกลุ่มลูกค้าตามประวัติการฝากเงิน 6 เดือนย้อนหลัง และติดตามอัตราการกลับมาเล่นในเดือนปัจจุบัน
+                </p>
+              </div>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input type="month" id="cohortTargetMonth" class="input-field" style="height:36px; padding:0 8px; width:150px; cursor:pointer;" title="เลือกเดือนที่ต้องการติดตามผล (เช่น ย้อนดูของเดือนที่แล้ว)">
+                <button id="btnFetchCohort" class="btn btn-accent" style="display:flex; align-items:center; gap:6px; font-weight:700;">
+                  <span>⚡</span> ดึงข้อมูล & วิเคราะห์กลุ่มลูกค้า
+                </button>
+                <button id="btnCancelCohort" class="btn btn-outline" style="display:none; color:#ef4444; border-color:rgba(239,68,68,0.4);">
+                  ⏹️ หยุดดึง
+                </button>
+                <button id="btnExportCohortExcel" class="btn" style="background:#10b981; color:#fff; display:none; font-weight:600; align-items:center; gap:6px;">
+                  <span>📥</span> ส่งออก Excel (.xlsx)
+                </button>
+                <button type="button" id="btnCohortClear" class="btn btn-secondary" style="display:none; font-weight:600;" title="ล้างผลการวิเคราะห์">
+                  <span>ล้าง</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cohort Status / Progress Bar Card -->
+          <div class="form-card" style="margin-top:16px; padding:14px 18px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+              <div>
+                <span style="font-weight:700; font-size:13px; color:var(--text-main);">📅 ขอบเขตข้อมูลการวิเคราะห์:</span>
+                <span id="cohortRangeInfo" style="font-size:13px; color:#38bdf8; margin-left:6px; font-weight:600;">กำลังตรวจสอบรอบเดือน...</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:12px; font-size:12px; color:var(--text-dim);">
+                <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                  <input type="checkbox" id="chkForceRefreshCohort" style="accent-color:var(--accent);">
+                  <span>ดึงสดใหม่ทั้งหมด (ไม่ใช้แคชในเครื่อง)</span>
+                </label>
+                <span id="cohortCacheNote" style="background:rgba(255,255,255,0.06); padding:2px 8px; border-radius:6px; border:1px solid var(--border-subtle);">
+                  ⚡ แคชประวัติช่วยประหยัดเวลา
+                </span>
+              </div>
+            </div>
+
+            <div id="cohortProgressContainer" style="display:none; margin-top:14px; background:rgba(0,0,0,0.25); padding:12px 16px; border-radius:8px; border:1px solid var(--border-subtle);">
+              <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:8px;">
+                <span id="cohortProgressText" style="color:var(--text-main); font-weight:600;">กำลังเริ่มต้นระบบ...</span>
+                <span id="cohortProgressPercent" style="color:#38bdf8; font-weight:bold; font-family:monospace;">0%</span>
+              </div>
+              <div style="width:100%; height:7px; background:rgba(255,255,255,0.08); border-radius:4px; overflow:hidden;">
+                <div id="cohortProgressBar" style="width:0%; height:100%; background:linear-gradient(90deg, #38bdf8, #10b981); transition:width 0.25s;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- KPI Summary Cards (Hidden until data fetched) -->
+          <div id="cohortKpiContainer" style="display:none; margin-top:18px;">
+            <!-- Overall Big Banner Card -->
+            <div style="background:linear-gradient(135deg, rgba(30,41,59,0.9), rgba(15,23,42,0.95)); border:1px solid rgba(56,189,248,0.25); border-radius:12px; padding:16px 22px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+              <div>
+                <div style="font-size:12px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px;">ภาพรวมสถิติการกลับมาเล่นในเดือนปัจจุบัน</div>
+                <div style="display:flex; align-items:baseline; gap:14px; margin-top:6px;">
+                  <span id="kpiOverallReturnRate" style="font-size:32px; font-weight:900; color:#10b981; font-family:monospace;">0.00%</span>
+                  <span id="kpiOverallRatio" style="font-size:15px; color:#f1f5f9; font-weight:600;">กลับมา 0 จากทั้งหมด 0 คน</span>
+                </div>
+              </div>
+              <div style="display:flex; gap:20px; align-items:center; border-left:1px solid rgba(255,255,255,0.1); padding-left:20px;">
+                <div>
+                  <div style="font-size:11px; color:#94a3b8;">ยอดฝากเดือนปัจจุบันรวม</div>
+                  <div id="kpiOverallCurrentDep" style="font-size:18px; font-weight:800; color:#38bdf8; font-family:monospace;">฿0.00</div>
+                </div>
+                <div>
+                  <div style="font-size:11px; color:#94a3b8;">ยอดฝากรวม 6 เดือน</div>
+                  <div id="kpiOverallHistDep" style="font-size:18px; font-weight:800; color:#cbd5e1; font-family:monospace;">฿0.00</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3 Main Cohort Groups Grid -->
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; margin-bottom:18px;">
+              <!-- Group 1 Card -->
+              <div style="background:var(--bg-card); border:1px solid rgba(245,158,11,0.3); border-radius:12px; padding:16px; display:flex; flex-direction:column; justify-content:space-between;">
+                <div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <span style="font-size:14px; font-weight:800; color:#f59e0b;">🏆 กลุ่มที่ 1 (ฝาก 3 เดือนขึ้นไป)</span>
+                    <span id="kpiG1Rate" style="font-size:18px; font-weight:900; color:#10b981; font-family:monospace;">0%</span>
+                  </div>
+                  <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+                    สมาชิกรวม: <b id="kpiG1Total" style="color:var(--text-main);">0</b> คน · กลับมา: <b id="kpiG1Return" style="color:#10b981;">0</b> คน
+                  </div>
+
+                  <!-- Subgroup 1.1 -->
+                  <div style="background:rgba(245,158,11,0.06); border:1px solid rgba(245,158,11,0.2); border-radius:8px; padding:10px 12px; margin-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span style="font-size:12px; font-weight:700; color:#fbbf24;">↳ กลุ่ม 1.1 (ด.ล่าสุดฝาก)</span>
+                      <span id="kpiG11Rate" style="font-size:13px; font-weight:800; color:#10b981; font-family:monospace;">0%</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-dim); margin-top:4px;">
+                      <span>ทั้งหมด: <b id="kpiG11Total" style="color:var(--text-main);">0</b> คน</span>
+                      <span>กลับมา: <b id="kpiG11Return" style="color:#10b981;">0</b> คน</span>
+                    </div>
+                  </div>
+
+                  <!-- Subgroup 1.2 -->
+                  <div style="background:rgba(245,158,11,0.03); border:1px solid rgba(245,158,11,0.12); border-radius:8px; padding:10px 12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span style="font-size:12px; font-weight:700; color:#d97706;">↳ กลุ่ม 1.2 (ด.ล่าสุดไม่ฝาก)</span>
+                      <span id="kpiG12Rate" style="font-size:13px; font-weight:800; color:#10b981; font-family:monospace;">0%</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-dim); margin-top:4px;">
+                      <span>ทั้งหมด: <b id="kpiG12Total" style="color:var(--text-main);">0</b> คน</span>
+                      <span>กลับมา: <b id="kpiG12Return" style="color:#10b981;">0</b> คน</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Group 2 Card -->
+              <div style="background:var(--bg-card); border:1px solid rgba(59,130,246,0.3); border-radius:12px; padding:16px; display:flex; flex-direction:column; justify-content:space-between;">
+                <div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <span style="font-size:14px; font-weight:800; color:#60a5fa;">🥈 กลุ่มที่ 2 (ฝาก 2 เดือน)</span>
+                    <span id="kpiG2Rate" style="font-size:18px; font-weight:900; color:#10b981; font-family:monospace;">0%</span>
+                  </div>
+                  <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+                    สมาชิกรวม: <b id="kpiG2Total" style="color:var(--text-main);">0</b> คน · กลับมา: <b id="kpiG2Return" style="color:#10b981;">0</b> คน
+                  </div>
+
+                  <!-- Subgroup 2.1 -->
+                  <div style="background:rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.2); border-radius:8px; padding:10px 12px; margin-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span style="font-size:12px; font-weight:700; color:#93c5fd;">↳ กลุ่ม 2.1 (ด.ล่าสุดฝาก)</span>
+                      <span id="kpiG21Rate" style="font-size:13px; font-weight:800; color:#10b981; font-family:monospace;">0%</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-dim); margin-top:4px;">
+                      <span>ทั้งหมด: <b id="kpiG21Total" style="color:var(--text-main);">0</b> คน</span>
+                      <span>กลับมา: <b id="kpiG21Return" style="color:#10b981;">0</b> คน</span>
+                    </div>
+                  </div>
+
+                  <!-- Subgroup 2.2 -->
+                  <div style="background:rgba(59,130,246,0.03); border:1px solid rgba(59,130,246,0.12); border-radius:8px; padding:10px 12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span style="font-size:12px; font-weight:700; color:#3b82f6;">↳ กลุ่ม 2.2 (ด.ล่าสุดไม่ฝาก)</span>
+                      <span id="kpiG22Rate" style="font-size:13px; font-weight:800; color:#10b981; font-family:monospace;">0%</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-dim); margin-top:4px;">
+                      <span>ทั้งหมด: <b id="kpiG22Total" style="color:var(--text-main);">0</b> คน</span>
+                      <span>กลับมา: <b id="kpiG22Return" style="color:#10b981;">0</b> คน</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Group 3 Card -->
+              <div style="background:var(--bg-card); border:1px solid rgba(16,185,129,0.3); border-radius:12px; padding:16px; display:flex; flex-direction:column; justify-content:space-between;">
+                <div>
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <span style="font-size:14px; font-weight:800; color:#34d399;">🥉 กลุ่มที่ 3 (ฝาก 1 เดือน)</span>
+                    <span id="kpiG3Rate" style="font-size:18px; font-weight:900; color:#10b981; font-family:monospace;">0%</span>
+                  </div>
+                  <div style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">
+                    สมาชิกรวม: <b id="kpiG3Total" style="color:var(--text-main);">0</b> คน · กลับมา: <b id="kpiG3Return" style="color:#10b981;">0</b> คน
+                  </div>
+
+                  <!-- Subgroup 3.1 -->
+                  <div style="background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:8px; padding:10px 12px; margin-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span style="font-size:12px; font-weight:700; color:#6ee7b7;">↳ กลุ่ม 3.1 (ด.ล่าสุดฝาก)</span>
+                      <span id="kpiG31Rate" style="font-size:13px; font-weight:800; color:#10b981; font-family:monospace;">0%</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-dim); margin-top:4px;">
+                      <span>ทั้งหมด: <b id="kpiG31Total" style="color:var(--text-main);">0</b> คน</span>
+                      <span>กลับมา: <b id="kpiG31Return" style="color:#10b981;">0</b> คน</span>
+                    </div>
+                  </div>
+
+                  <!-- Subgroup 3.2 -->
+                  <div style="background:rgba(16,185,129,0.03); border:1px solid rgba(16,185,129,0.12); border-radius:8px; padding:10px 12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span style="font-size:12px; font-weight:700; color:#10b981;">↳ กลุ่ม 3.2 (ด.ล่าสุดไม่ฝาก)</span>
+                      <span id="kpiG32Rate" style="font-size:13px; font-weight:800; color:#10b981; font-family:monospace;">0%</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:11px; color:var(--text-dim); margin-top:4px;">
+                      <span>ทั้งหมด: <b id="kpiG32Total" style="color:var(--text-main);">0</b> คน</span>
+                      <span>กลับมา: <b id="kpiG32Return" style="color:#10b981;">0</b> คน</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Daily Summary (ตารางการกลับมารายวัน) -->
+          <div id="cohortDailySummaryContainer" style="display:none; margin-top:16px; margin-bottom:16px; padding:16px; border-radius:12px; border:1px solid var(--border-subtle); background:rgba(0,0,0,0.18);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+              <h3 id="cohortDailySumTitle" style="margin:0; font-size:14px; color:var(--text-main); font-weight:700;">📅 สรุปการกลับมารายวัน (เดือนติดตามผล)</h3>
+              <div id="cohortDailySumStats" style="display:flex; align-items:center; gap:6px; font-size:12px;"></div>
+            </div>
+            <div style="overflow-x:auto;">
+              <table style="width:100%; border-collapse:collapse; font-size:11.5px; text-align:center; min-width:980px;">
+                <thead style="background:rgba(255,255,255,0.05);">
+                  <tr id="cohortDailySumHead"></tr>
+                </thead>
+                <tbody>
+                  <tr id="cohortDailySumBodyUsers" style="font-weight:600; color:#38bdf8;"></tr>
+                  <tr id="cohortDailySumBodyDep" style="color:#10b981;"></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Table Container Card -->
+          <div class="form-card" style="margin-top:16px;">
+            <!-- Filter Toolbar -->
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+              <div id="cohortTierTabs" class="ranking-tier-filters" style="margin-bottom:0; display:flex; flex-wrap:wrap; gap:4px;">
+                <button type="button" class="btn btn-outline active" data-group="all" style="font-size:12px; padding:5px 10px;">ทั้งหมด</button>
+                <button type="button" class="btn btn-outline" data-group="1" style="font-size:12px; padding:5px 10px; color:#f59e0b;">กลุ่ม 1</button>
+                <button type="button" class="btn btn-outline" data-group="1.1" style="font-size:12px; padding:5px 10px;">1.1</button>
+                <button type="button" class="btn btn-outline" data-group="1.2" style="font-size:12px; padding:5px 10px;">1.2</button>
+                <button type="button" class="btn btn-outline" data-group="2" style="font-size:12px; padding:5px 10px; color:#60a5fa;">กลุ่ม 2</button>
+                <button type="button" class="btn btn-outline" data-group="2.1" style="font-size:12px; padding:5px 10px;">2.1</button>
+                <button type="button" class="btn btn-outline" data-group="2.2" style="font-size:12px; padding:5px 10px;">2.2</button>
+                <button type="button" class="btn btn-outline" data-group="3" style="font-size:12px; padding:5px 10px; color:#34d399;">กลุ่ม 3</button>
+                <button type="button" class="btn btn-outline" data-group="3.1" style="font-size:12px; padding:5px 10px;">3.1</button>
+                <button type="button" class="btn btn-outline" data-group="3.2" style="font-size:12px; padding:5px 10px;">3.2</button>
+              </div>
+
+              <div style="display:flex; align-items:center; gap:8px;">
+                <select id="cohortReturnFilter" class="select-field" style="max-width:160px; font-size:12px; height:32px; padding:2px 8px;">
+                  <option value="all">สถานะ: ทั้งหมด</option>
+                  <option value="returned">✅ เฉพาะที่กลับมาแล้ว</option>
+                  <option value="not_returned">❌ เฉพาะที่ยังไม่กลับมา</option>
+                </select>
+                <input type="text" id="cohortSearchInput" class="input-field" placeholder="ค้นหายูสเซอร์ / เบอร์ / ชื่อ..." style="width:190px; font-size:12px; height:32px; padding:4px 10px;">
+              </div>
+            </div>
+
+            <!-- Table Info Bar -->
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-size:12px; color:var(--text-dim);">
+              <span id="cohortTableInfo">พร้อมแสดงข้อมูลหลังการดึง</span>
+              <span id="cohortTableSummary"></span>
+            </div>
+
+            <!-- Table Wrapper -->
+            <div style="overflow-x:auto; max-height:600px; border:1px solid var(--border-subtle); border-radius:8px;">
+              <table style="width:100%; border-collapse:collapse; font-size:12px; text-align:left;">
+                <thead id="cohortTableHead" style="position:sticky; top:0; background:var(--bg-card); z-index:2; border-bottom:2px solid var(--border-subtle);">
+                  <tr>
+                    <th style="padding:10px 10px; text-align:center; width:50px;">ลำดับ</th>
+                    <th style="padding:10px 10px; text-align:center; width:90px;">กลุ่ม</th>
+                    <th style="padding:10px 10px; text-align:center; width:120px;">ยูสเซอร์</th>
+                    <th style="padding:10px 10px; text-align:center; width:110px;">เบอร์โทร</th>
+                    <th style="padding:10px 12px; text-align:left; min-width:140px;">ชื่อ-นามสกุล</th>
+                    <th style="padding:10px 10px; text-align:right; width:95px;" id="thMonthM6">ด.3</th>
+                    <th style="padding:10px 10px; text-align:right; width:95px;" id="thMonthM5">ด.4</th>
+                    <th style="padding:10px 10px; text-align:right; width:95px;" id="thMonthM4">ด.5</th>
+                    <th style="padding:10px 10px; text-align:right; width:95px;" id="thMonthM3">ด.6</th>
+                    <th style="padding:10px 10px; text-align:right; width:95px;" id="thMonthM2">ด.7</th>
+                    <th style="padding:10px 10px; text-align:right; width:95px;" id="thMonthM1">ด.8</th>
+                    <th style="padding:10px 10px; text-align:center; width:80px;">เดือนที่ฝาก</th>
+                    <th style="padding:10px 10px; text-align:center; width:120px;" id="thMonthCurStatus">สถานะเดือนนี้</th>
+                    <th style="padding:10px 10px; text-align:right; width:110px;" id="thMonthCurDep">ยอดฝากเดือนนี้</th>
+                    <th style="padding:10px 10px; text-align:center; width:140px;">ออนไลน์ล่าสุด</th>
+                  </tr>
+                </thead>
+                <tbody id="cohortTableBody">
+                  <tr>
+                    <td colspan="15" style="text-align:center; padding:40px 20px; color:var(--text-muted);">
+                      ยังไม่มีข้อมูล กรุณากดปุ่ม <b>"⚡ ดึงข้อมูล & วิเคราะห์กลุ่มลูกค้า"</b> ด้านบน
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6. REPORTS -->
+        <section id="view-reports" class="view-pane">
+          <div class="view-title">
+            <h1>ดึงรายงาน</h1>
+            <p>ดึงรายงานสรุปฝาก และดึงรายงานเติมเงิน โบนัส แลกแต้ม แมนนวล พร้อมกระทบยอดการเงิน ส่งออกเป็นไฟล์ .xlsx</p>
+          </div>
+
+          <div class="form-card" style="margin-top:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+              <h3 style="font-size:15px; margin:0;">📥 1. รายงานฝาก (เมนู 3.1)</h3>
+              <span style="font-size:12px; color:var(--text-dim);">ดึงสรุปยอดก่อน แล้วกดส่งออก Excel</span>
+            </div>
+            <div class="form-row" style="align-items:flex-end;">
+              <div class="form-group">
+                <label>ตั้งแต่วันที่</label>
+                <input type="date" id="repDepositStart" class="input-field">
+              </div>
+              <div class="form-group">
+                <label>ถึงวันที่</label>
+                <input type="date" id="repDepositEnd" class="input-field">
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label style="font-size:12px; color:var(--text-muted);">กรองด่วน</label>
+                <div style="display:flex; gap:6px;">
+                  <button type="button" id="btnDepositToday" class="btn btn-secondary" style="height:38px; padding:0 12px; font-size:12px; font-weight:600; white-space:nowrap;" title="กรองเฉพาะรายการของวันนี้">📅 วันนี้</button>
+                  <button type="button" id="btnDepositYesterday" class="btn btn-secondary" style="height:38px; padding:0 12px; font-size:12px; font-weight:600; white-space:nowrap;" title="กรองเฉพาะรายการของเมื่อวาน">⏮️ เมื่อวาน</button>
+                </div>
+              </div>
+              <div class="form-group" style="max-width:140px;">
+                <label>ขนาดหน้า</label>
+                <select id="repDepositPageSize" class="select-field">
+                  <option value="200">200 รายการ</option>
+                  <option value="100">100 รายการ</option>
+                  <option value="50">50 รายการ</option>
+                </select>
+              </div>
+              <button id="btnFetchDepositReport" class="btn btn-accent" style="height:38px;">🔍 ดึงข้อมูล & สรุปยอดฝาก</button>
+              <button type="button" id="btnDepositClear" class="btn btn-secondary" style="height:38px;" title="ล้างค่าและผลสรุป">ล้าง</button>
+            </div>
+            <div id="statusDepositReport" style="margin-top:10px; font-size:12px; color:var(--text-muted);"></div>
+
+            <!-- กล่องแสดงสรุปยอดรายงานฝาก 3.1 (แสดงหลังจากดึงข้อมูลเสร็จ) -->
+            <div id="containerDepositSummary" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--border-subtle);">
+              <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-bottom:14px;">
+                <div class="wallet-stat-card highlight">
+                  <div class="wallet-stat-title">💰 ยอดเงินฝากรวม (สำเร็จ)</div>
+                  <div class="wallet-stat-val text-primary" id="sumDepositAmount">฿0.00</div>
+                  <div class="wallet-stat-hint" id="sumDepositSuccessCount">สำเร็จ 0 รายการ</div>
+                </div>
+                <div class="wallet-stat-card">
+                  <div class="wallet-stat-title">📋 จำนวนรายการทั้งหมด</div>
+                  <div class="wallet-stat-val" id="sumDepositTotalRows">0 รายการ</div>
+                  <div class="wallet-stat-hint" id="sumDepositOtherCount">อื่นๆ/รอ 0 รายการ</div>
+                </div>
+                <div class="wallet-stat-card" style="display:flex; flex-direction:column; justify-content:center;">
+                  <div class="wallet-stat-title">📥 บันทึกเป็นไฟล์ Excel</div>
+                  <div style="margin-top:8px;">
+                    <button id="btnExportDepositExcel" class="btn btn-accent" style="width:100%; height:36px; font-size:12px;">📊 ส่งออก Excel (.xlsx)</button>
+                  </div>
+                  <div class="wallet-stat-hint" id="statusExportDeposit" style="margin-top:6px;">พร้อมส่งออกข้อมูลที่ดึงไว้</div>
+                </div>
+              </div>
+              <div id="depositBankBreakdown" style="font-size:12px; color:var(--text-dim); display:flex; flex-wrap:wrap; gap:8px;"></div>
+            </div>
+          </div>
+
+          <!-- 2. ดึงรายงานเติมเงิน, โบนัส & กระทบยอดเงินขาด-เกิน (Cash Reconciliation & Audit) -->
+          <div class="form-card" style="margin-top:20px; border-left: 4px solid #0f766e;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+              <div>
+                <h3 style="font-size:15px; margin:0; display:flex; align-items:center; gap:8px;">
+                  <span>🎁 2. ดึงรายงานเติมเงิน, โบนัส & กระทบยอดเงินขาด-เกิน</span>
+                  <span style="font-size:11px; background:rgba(15,118,110,0.15); color:#0f766e; border:1px solid rgba(15,118,110,0.3); padding:2px 8px; border-radius:12px; font-weight:600;">Reconciliation & Audit</span>
+                </h3>
+                <p style="font-size:12px; color:var(--text-dim); margin:4px 0 0 0;">กระทบยอดเงินสดจริงในบัญชีธนาคาร vs เครดิตระบบ (ฝาก-ถอนมือ/ปรับยอด/โบนัส/แต้ม) พร้อมระบบสแกนจับคู่ยอดเงินขาด (เช่น 1,092 บาท)</p>
+              </div>
+            </div>
+
+            <div class="form-row" style="align-items:flex-end;">
+              <div class="form-group">
+                <label>ตั้งแต่วันที่</label>
+                <input type="date" id="repReconcileStart" class="input-field">
+              </div>
+              <div class="form-group">
+                <label>ถึงวันที่</label>
+                <input type="date" id="repReconcileEnd" class="input-field">
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label style="font-size:12px; color:var(--text-muted);">กรองด่วน</label>
+                <div style="display:flex; gap:6px;">
+                  <button type="button" id="btnReconcileToday" class="btn btn-secondary" style="height:38px; padding:0 12px; font-size:12px; font-weight:600; white-space:nowrap;" title="กรองเฉพาะรายการของวันนี้">📅 วันนี้</button>
+                  <button type="button" id="btnReconcileYesterday" class="btn btn-secondary" style="height:38px; padding:0 12px; font-size:12px; font-weight:600; white-space:nowrap;" title="กรองเฉพาะรายการของเมื่อวาน">⏮️ เมื่อวาน</button>
+                </div>
+              </div>
+              <div class="form-group" style="min-width:180px;">
+                <label>🎯 ยอดเงินขาดที่ต้องการตรวจสอบ (บาท)</label>
+                <input type="number" id="repReconcileDiscrepancy" class="input-field" placeholder="เว้นว่างได้ หรือระบุเช่น 1092" step="any">
+              </div>
+              <button id="btnFetchReconcile" class="btn btn-accent" style="height:38px; display:inline-flex; align-items:center; gap:6px;">
+                <span>🔍 ดึงข้อมูล & ตรวจสอบกระทบยอด</span>
+              </button>
+              <button type="button" id="btnReconcileClear" class="btn btn-secondary" style="height:38px;" title="ล้างค่าและตารางกระทบยอด">
+                <span>ล้าง</span>
+              </button>
+            </div>
+            <div id="statusReconcileReport" style="margin-top:10px; font-size:12px; color:var(--text-muted);"></div>
+
+            <!-- กล่องแสดงผลสรุปกระทบยอด (แสดงเมื่อดึงข้อมูลเสร็จ) -->
+            <div id="containerReconcileSummary" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--border-subtle);">
+              <!-- 4 Core Summary Cards (แมนนวล · ปรับมือ · กิจกรรม · ยอดต้องสงสัย) -->
+              <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:14px; margin-bottom:16px;">
+                <!-- กล่องที่ 1: แมนนวล -->
+                <div class="wallet-stat-card" style="border-left:4px solid #0d9488; background:rgba(13,148,136,0.04);">
+                  <div class="wallet-stat-title" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(13,148,136,0.2); padding-bottom:6px; margin-bottom:8px;">
+                    <span style="font-weight:700; color:#0d9488; font-size:13.5px;">🛠️ แมนนวล</span>
+                    <span id="badgeReconcileManualCount" style="font-size:11px; background:rgba(13,148,136,0.15); color:#0d9488; padding:2px 8px; border-radius:10px; font-weight:600;">0 รายการ</span>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:6px; font-size:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span style="color:var(--text-muted);">ฝาก:</span>
+                      <strong id="boxManualDeposit" style="color:#10b981;">0 รายการ (฿0.00)</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span style="color:var(--text-muted);">ถอน:</span>
+                      <strong id="boxManualWithdraw" style="color:#ef4444;">0 รายการ (-฿0.00)</strong>
+                    </div>
+                    <div style="border-top:1px dashed var(--border-subtle); padding-top:6px; display:flex; flex-direction:column; gap:4px;">
+                      <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="color:#10b981;">🟢 ระบุบัญชี:</span>
+                        <span id="boxManualWithBank" style="font-weight:600; color:var(--text-main);">0 รายการ (฿0.00)</span>
+                      </div>
+                      <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="color:#eab308;">🟡 ไม่ระบุบัญชี:</span>
+                        <span id="boxManualNoBank" style="font-weight:600; color:var(--text-main);">0 รายการ (฿0.00)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- กล่องที่ 2: ปรับมือ -->
+                <div class="wallet-stat-card" style="border-left:4px solid #3b82f6; background:rgba(59,130,246,0.04);">
+                  <div class="wallet-stat-title" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(59,130,246,0.2); padding-bottom:6px; margin-bottom:8px;">
+                    <span style="font-weight:700; color:#3b82f6; font-size:13.5px;">✍️ ปรับมือ</span>
+                    <span id="badgeReconcileAdjustCount" style="font-size:11px; background:rgba(59,130,246,0.15); color:#3b82f6; padding:2px 8px; border-radius:10px; font-weight:600;">0 รายการ</span>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:6px; font-size:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span style="color:var(--text-muted);">ฝาก (ปรับเพิ่ม +):</span>
+                      <strong id="boxAdjustIncrease" style="color:#3b82f6;">0 รายการ (+฿0.00)</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span style="color:var(--text-muted);">ถอน (ปรับลด -):</span>
+                      <strong id="boxAdjustDecrease" style="color:#f97316;">0 รายการ (-฿0.00)</strong>
+                    </div>
+                    <div style="border-top:1px dashed var(--border-subtle); padding-top:6px; font-size:11px; color:var(--text-dim);">
+                      * ปรับตรงในระบบ (ไม่มีเงินเข้า-ออกธนาคาร)
+                    </div>
+                  </div>
+                </div>
+
+                <!-- กล่องที่ 3: กิจกรรม -->
+                <div class="wallet-stat-card" style="border-left:4px solid #8b5cf6; background:rgba(139,92,246,0.04);">
+                  <div class="wallet-stat-title" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(139,92,246,0.2); padding-bottom:6px; margin-bottom:8px;">
+                    <span style="font-weight:700; color:#8b5cf6; font-size:13.5px;">🎁 กิจกรรม</span>
+                    <span id="badgeReconcileActivityCount" style="font-size:11px; background:rgba(139,92,246,0.15); color:#8b5cf6; padding:2px 8px; border-radius:10px; font-weight:600;">0 รายการ</span>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:6px; font-size:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span style="color:var(--text-muted);">โบนัส:</span>
+                      <strong id="boxActivityBonus" style="color:#a855f7;">0 รายการ (฿0.00)</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span style="color:var(--text-muted);">แลกแต้ม:</span>
+                      <strong id="boxActivityReward" style="color:#06b6d4;">0 รายการ (฿0.00)</strong>
+                    </div>
+                    <div style="border-top:1px dashed var(--border-subtle); padding-top:6px; font-size:11px; color:var(--text-dim);">
+                      * เครดิตโปรโมชั่นและแต้มสะสม
+                    </div>
+                  </div>
+                </div>
+
+                <!-- กล่องที่ 4: ยอดต้องสงสัย -->
+                <div class="wallet-stat-card" style="border-left:4px solid #ef4444; background:rgba(239,68,68,0.04);">
+                  <div class="wallet-stat-title" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(239,68,68,0.2); padding-bottom:6px; margin-bottom:8px;">
+                    <span style="font-weight:700; color:#ef4444; font-size:13.5px;">🎯 ยอดต้องสงสัย</span>
+                    <span id="badgeReconcileSuspectCount" style="font-size:11px; background:rgba(239,68,68,0.15); color:#ef4444; padding:2px 8px; border-radius:10px; font-weight:600;">0 รายการ</span>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:6px; font-size:12px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span style="color:var(--text-muted);">ยอดตรงเงินขาด<span id="lblTargetDiscrepancyTag" style="display:none;"> (<span id="lblTargetDiscrepancy"></span> บ.)</span>:</span>
+                      <strong id="boxSuspectExact" style="color:#ef4444;">-</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span style="color:var(--text-muted);">ชุดรวมได้ยอดขาด:</span>
+                      <strong id="boxSuspectCombo" style="color:#f59e0b;">-</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span style="color:var(--text-muted);">ฝากมือไม่ระบุบัญชี:</span>
+                      <strong id="boxSuspectNoBank" style="color:#ef4444;">0 รายการ (฿0.00)</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Target Discrepancy Findings Box -->
+              <div id="boxDiscrepancyFindings" style="background:rgba(124,58,237,0.06); border:1px solid rgba(124,58,237,0.25); border-radius:8px; padding:14px 16px; margin-bottom:16px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:18px;">🎯</span>
+                    <h4 style="margin:0; font-size:14px; color:#8b5cf6;" id="titleDiscrepancyAudit">ผลการตรวจสอบยอดเงินขาด (เป้าหมาย ฿1,092.00)</h4>
+                  </div>
+                  <span id="badgeDiscrepancyStatus" style="font-size:12px; font-weight:600; padding:2px 8px; border-radius:10px; background:rgba(124,58,237,0.15); color:#8b5cf6;">กำลังวิเคราะห์</span>
+                </div>
+                <div id="contentDiscrepancyAudit" style="font-size:12.5px; color:var(--text-main); line-height:1.6;">
+                  <!-- Dynamic explanation and matching items list -->
+                </div>
+              </div>
+
+              <!-- Action & Export Bar -->
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid var(--border-subtle);">
+                <div style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-muted);">
+                  <span>📋 ข้อมูลการกระทบยอด:</span>
+                  <span id="badgeReconcileRatio" style="font-weight:600; color:var(--text-main);">เงินสดจริง 0 รายการ · เครดิตลม 0 รายการ</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:12px;">
+                  <span id="statusExportReconcile" style="font-size:12px; color:var(--text-muted);"></span>
+                  <button id="btnExportReconcileExcel" class="btn btn-accent" style="height:36px; padding:0 18px; font-size:12px; display:inline-flex; align-items:center; gap:6px;">
+                    <span>📊 ส่งออกรายงานกระทบยอด Excel (.xlsx)</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Interactive Filter Tabs & Search Bar -->
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+                <!-- Filter Tabs -->
+                <div style="display:flex; flex-wrap:wrap; gap:6px;" id="tabsReconcileFilter">
+                  <button type="button" class="btn-reconcile-filter active" data-filter="all" style="padding:5px 12px; font-size:12px; border-radius:6px; cursor:pointer; background:var(--accent); border:1px solid var(--accent); color:#000; font-weight:600;">
+                    ทั้งหมด (<span id="cntFilterReconcileAll">0</span>)
+                  </button>
+                  <button type="button" class="btn-reconcile-filter" data-filter="target_match" style="padding:5px 12px; font-size:12px; border-radius:6px; cursor:pointer; background:var(--bg-card); border:1px solid rgba(124,58,237,0.4); color:#a78bfa; font-weight:600;">
+                    🎯 ยอดตรงเงินขาด (<span id="cntFilterReconcileMatch">0</span>)
+                  </button>
+                  <button type="button" class="btn-reconcile-filter" data-filter="cash_in" style="padding:5px 12px; font-size:12px; border-radius:6px; cursor:pointer; background:var(--bg-card); border:1px solid var(--border-subtle); color:var(--text-muted);">
+                    🟢 เงินสดรับจริง (<span id="cntFilterReconcileCashIn">0</span>)
+                  </button>
+                  <button type="button" class="btn-reconcile-filter" data-filter="cash_out" style="padding:5px 12px; font-size:12px; border-radius:6px; cursor:pointer; background:var(--bg-card); border:1px solid var(--border-subtle); color:var(--text-muted);">
+                    🔴 เงินสดจ่ายจริง (<span id="cntFilterReconcileCashOut">0</span>)
+                  </button>
+                  <button type="button" class="btn-reconcile-filter" data-filter="suspicious" style="padding:5px 12px; font-size:12px; border-radius:6px; cursor:pointer; background:var(--bg-card); border:1px solid rgba(239,68,68,0.4); color:#f87171;">
+                    ⚠️ แมนนวลเสี่ยง/ปรับยอด (<span id="cntFilterReconcileSuspicious">0</span>)
+                  </button>
+                  <button type="button" class="btn-reconcile-filter" data-filter="bonus_reward" style="padding:5px 12px; font-size:12px; border-radius:6px; cursor:pointer; background:var(--bg-card); border:1px solid var(--border-subtle); color:var(--text-muted);">
+                    🎁 โบนัส & แต้ม (<span id="cntFilterReconcileBonus">0</span>)
+                  </button>
+                </div>
+
+                <!-- Search Input -->
+                <div style="position:relative; min-width:240px; flex:1; max-width:320px;">
+                  <input type="text" id="searchReconcileTable" class="input-field" placeholder="🔎 ค้นหายูสเซอร์, เบอร์, แอดมิน, บัญชี..." style="width:100%; height:32px; font-size:12px; padding:4px 10px;">
+                </div>
+              </div>
+
+              <!-- Interactive Preview Table -->
+              <div style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:8px; overflow:hidden;">
+                <div style="max-height:460px; overflow-y:auto; overflow-x:auto;">
+                  <table style="width:100%; border-collapse:collapse; font-size:12px; text-align:left;">
+                    <thead>
+                      <tr style="background:rgba(0,0,0,0.25); border-bottom:1px solid var(--border-subtle); color:var(--text-muted); position:sticky; top:0; z-index:2;">
+                        <th style="padding:9px 10px; text-align:center; width:50px;">#</th>
+                        <th style="padding:9px 10px; width:150px;">ประเภทรายการ</th>
+                        <th style="padding:9px 10px; width:130px;">สถานะเงินสด</th>
+                        <th style="padding:9px 10px; width:120px;">ยูสเซอร์</th>
+                        <th style="padding:9px 10px; width:140px;">ชื่อลูกค้า</th>
+                        <th style="padding:9px 10px; width:110px;">เบอร์โทร</th>
+                        <th style="padding:9px 10px; text-align:right; width:120px;">ยอดเงิน (฿)</th>
+                        <th style="padding:9px 10px; width:180px;">ธนาคาร/ช่องทาง</th>
+                        <th style="padding:9px 10px; width:110px;">ผู้ทำรายการ</th>
+                        <th style="padding:9px 10px; width:140px;">เวลาทำรายการ</th>
+                        <th style="padding:9px 10px;">หมายเหตุ</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbodyReconcileList">
+                      <!-- Rendered rows -->
+                    </tbody>
+                  </table>
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 14px; background:rgba(0,0,0,0.15); border-top:1px solid var(--border-subtle); font-size:11.5px; color:var(--text-dim);">
+                  <span id="lblReconcileTableCount">แสดง 0 รายการ</span>
+                  <span style="font-size:11px;">* ตารางพรีวิวบนหน้าจอแสดง 150 รายการแรก (ส่งออก Excel เพื่อดูครบทุกรายการ)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. จัดอันดับยอดฝากสูงสุด (ดึงยูสเซอร์ทั้งหมด & ยอดฝากรวม) -->
+          <div class="form-card" style="margin-top:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+              <div>
+                <h3 style="font-size:15px; margin:0; display:flex; align-items:center; gap:8px;">
+                  <span>💎 4. จัดอันดับยอดฝากสูงสุด (ดึงยูสเซอร์ทั้งหมด)</span>
+                  <span style="font-size:11px; background:rgba(245,158,11,0.15); color:var(--accent); border:1px solid rgba(245,158,11,0.3); padding:2px 8px; border-radius:12px; font-weight:600;">แบ่งกลุ่มลูกค้า VIP / ทั่วไป / ใหม่</span>
+                </h3>
+                <p style="font-size:12px; color:var(--text-dim); margin:4px 0 0 0;">ดึงข้อมูลรายชื่อสมาชิกทั้งหมดของเว็บ พร้อมยอดฝากรวมสะสม จัดอันดับจากมากไปน้อย เบอร์ ชื่อ-นามสกุล ออนไลน์ล่าสุด และวันที่สมัคร</p>
+              </div>
+            </div>
+
+            <!-- Action Bar: Direct Pull Button & Tier Badges -->
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+              <div style="display:flex; gap:8px; align-items:center;">
+                <button id="btnFetchMonthlyRanking" class="btn btn-accent" style="height:42px; padding:0 24px; font-weight:700; font-size:13.5px; display:inline-flex; align-items:center; gap:8px;">
+                  <span>🔍 ดึงข้อมูลยูสเซอร์ทั้งหมด & จัดอันดับยอดฝากรวม</span>
+                </button>
+                <button type="button" id="btnRankingClear" class="btn btn-secondary" style="height:42px; padding:0 18px;" title="ล้างผลการจัดอันดับ">
+                  <span>ล้าง</span>
+                </button>
+              </div>
+
+              <div style="display:flex; flex-wrap:wrap; gap:8px; font-size:11.5px; color:var(--text-dim); align-items:center;">
+                <span style="font-weight:600;">เกณฑ์กลุ่ม:</span>
+                <span style="background:rgba(217,119,6,0.12); color:#f59e0b; border:1px solid rgba(217,119,6,0.3); padding:2px 8px; border-radius:6px;">🥇 VIP: ฿1,000,000 – ฿100,000,000</span>
+                <span style="background:rgba(37,99,235,0.12); color:#38bdf8; border:1px solid rgba(37,99,235,0.3); padding:2px 8px; border-radius:6px;">🥈 ทั่วไป: ฿100,000 – ฿999,999</span>
+                <span style="background:rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.3); padding:2px 8px; border-radius:6px;">🥉 ใหม่: ฿0 – ฿99,999</span>
+              </div>
+            </div>
+
+            <div id="statusMonthlyRanking" style="margin-top:10px; font-size:12px; color:var(--text-muted);"></div>
+
+            <!-- Live Progress Bar & Cancel Control -->
+            <div id="rankingProgressBarContainer" style="display:none; margin-top:12px; background:rgba(0,0,0,0.25); border:1px solid var(--border-subtle); border-radius:8px; padding:12px 14px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:12px;">
+                <span id="rankingProgressText" style="color:var(--text-primary); font-weight:600;">⏳ กำลังเริ่มดึงข้อมูล...</span>
+                <span id="rankingProgressPercent" style="color:var(--accent); font-weight:700; font-family:monospace;">0%</span>
+              </div>
+              <div style="width:100%; height:8px; background:rgba(255,255,255,0.08); border-radius:4px; overflow:hidden;">
+                <div id="rankingProgressBarFill" style="width:0%; height:100%; background:linear-gradient(90deg, #f59e0b, #10b981); transition:width 0.25s ease; border-radius:4px;"></div>
+              </div>
+              <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <small style="color:var(--text-dim); font-size:11px;">* หากดึงหลายเดือน ระบบจะดึงทีละหน้า สามารถกดหยุดเพื่อดูและส่งออกข้อมูลเท่าที่ดึงได้ทันที</small>
+                <button type="button" id="btnCancelRanking" class="btn btn-secondary btn-sm" style="height:28px; padding:0 12px; font-size:11.5px; color:#ef4444; border-color:rgba(239,68,68,0.4); font-weight:600;">
+                  ⏹️ หยุดดึงข้อมูล (แสดงเท่าที่ได้)
+                </button>
+              </div>
+            </div>
+
+            <!-- Container Ranking Results (Hidden until fetched) -->
+            <div id="containerMonthlyRanking" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--border-subtle);">
+              <!-- 4 Stat Cards -->
+              <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:12px; margin-bottom:16px;">
+                <div class="wallet-stat-card" style="border-left:4px solid #f59e0b; background:linear-gradient(135deg, rgba(217,119,6,0.1), rgba(15,23,42,0.6));">
+                  <div class="wallet-stat-title" style="color:#f59e0b;">🥇 กลุ่ม VIP (1M - 100M)</div>
+                  <div class="wallet-stat-val text-warning" id="rankStatVipAmount">฿0.00</div>
+                  <div class="wallet-stat-hint" id="rankStatVipCount">0 คน</div>
+                </div>
+                <div class="wallet-stat-card" style="border-left:4px solid #38bdf8; background:linear-gradient(135deg, rgba(56,189,248,0.1), rgba(15,23,42,0.6));">
+                  <div class="wallet-stat-title" style="color:#38bdf8;">🥈 กลุ่มทั่วไป (100K - 999K)</div>
+                  <div class="wallet-stat-val text-primary" id="rankStatGeneralAmount">฿0.00</div>
+                  <div class="wallet-stat-hint" id="rankStatGeneralCount">0 คน</div>
+                </div>
+                <div class="wallet-stat-card" style="border-left:4px solid #10b981; background:linear-gradient(135deg, rgba(16,185,129,0.1), rgba(15,23,42,0.6));">
+                  <div class="wallet-stat-title" style="color:#10b981;">🥉 กลุ่มใหม่ (0 - 99K)</div>
+                  <div class="wallet-stat-val" style="color:#10b981;" id="rankStatNewAmount">฿0.00</div>
+                  <div class="wallet-stat-hint" id="rankStatNewCount">0 คน</div>
+                </div>
+                <div class="wallet-stat-card highlight">
+                  <div class="wallet-stat-title">👥 ยอดฝากรวมทั้งหมด</div>
+                  <div class="wallet-stat-val" id="rankStatTotalAmount">฿0.00</div>
+                  <div class="wallet-stat-hint" id="rankStatTotalCount">รวม 0 คน</div>
+                </div>
+              </div>
+
+              <!-- Header Bar for Table: Filter Buttons & Export Action -->
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+                <!-- Filter Tabs -->
+                <div class="btn-group" id="rankingTierFilters" style="display:inline-flex; gap:6px;">
+                  <button class="btn btn-secondary active" data-tier="all" style="height:32px; padding:0 12px; font-size:12px;">ทั้งหมด (<span id="countTabAll">0</span>)</button>
+                  <button class="btn btn-secondary" data-tier="vip" style="height:32px; padding:0 12px; font-size:12px; color:#f59e0b;">🥇 VIP (<span id="countTabVip">0</span>)</button>
+                  <button class="btn btn-secondary" data-tier="general" style="height:32px; padding:0 12px; font-size:12px; color:#38bdf8;">🥈 ทั่วไป (<span id="countTabGeneral">0</span>)</button>
+                  <button class="btn btn-secondary" data-tier="new" style="height:32px; padding:0 12px; font-size:12px; color:#10b981;">🥉 ใหม่ (<span id="countTabNew">0</span>)</button>
+                </div>
+
+                <!-- Export Action -->
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span id="statusExportRanking" style="font-size:12px; color:var(--text-muted);"></span>
+                  <button id="btnExportMonthlyRankingExcel" class="btn btn-accent" style="height:36px; padding:0 16px; font-size:12px;">
+                    📊 ส่งออก Excel (.xlsx) จัดกลุ่มสวยงาม
+                  </button>
+                </div>
+              </div>
+
+              <!-- Ranking Table Preview -->
+              <div class="table-responsive" style="max-height:420px; overflow-y:auto; border:1px solid var(--border-subtle); border-radius:8px; background:rgba(0,0,0,0.15);">
+                <table class="data-table" style="width:100%; border-collapse:collapse; font-size:12.5px;">
+                  <thead style="position:sticky; top:0; z-index:2; background:#1e293b; color:#fff;">
+                    <tr>
+                      <th style="padding:10px 12px; text-align:right; width:150px;">ยอดฝากทั้งหมด</th>
+                      <th style="padding:10px 10px; text-align:center; width:140px;">ยูสเซอร์</th>
+                      <th style="padding:10px 10px; text-align:center; width:125px;">เบอร์</th>
+                      <th style="padding:10px 12px; text-align:left;">ชื่อ-นามสกุล</th>
+                      <th style="padding:10px 10px; text-align:center; width:150px;">ออนไลน์ล่าสุด</th>
+                      <th style="padding:10px 10px; text-align:center; width:120px;">วันที่สมัคร</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rankingTableBody">
+                    <tr>
+                      <td colspan="6" style="text-align:center; padding:30px; color:var(--text-dim);">กดปุ่ม "ดึงข้อมูลยูสเซอร์ทั้งหมด & จัดอันดับยอดฝากรวม" เพื่อดูข้อมูล</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; font-size:11.5px; color:var(--text-dim);">
+                <span id="rankingTableInfo">แสดง 0 รายการ</span>
+                <span>* จัดเรียงจากยอดฝากทั้งหมดสูงสุดลงไปหาต่ำสุด</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 7. API ANALYZER -->
+        <section id="view-analyzer" class="view-pane">
+          <div class="view-header">
+            <div class="view-title">
+              <h1>NK API Analyzer & Global Server Observer</h1>
+              <p>เรียนรู้ API อัตโนมัติ (1 เหตุการณ์บันทึก 1 ครั้ง) พร้อม Inspector เจาะลึก Query / Request / Response</p>
+            </div>
+            <div class="header-actions" style="display:flex; gap:10px; align-items:center;">
+              <button id="btnExportAnalyzerJson" class="btn btn-secondary" title="ส่งออกข้อมูล API และประวัติเป็นไฟล์ JSON">📥 ส่งออก JSON</button>
+              <button id="btnObserverTick" class="btn btn-secondary" title="ดึงข้อมูลรอบใหม่จาก Server">↻ ตรวจ Server ตอนนี้</button>
+              <button id="btnClearAnalyzer" class="btn btn-danger" title="ล้างประวัติและข้อมูลที่เรียนรู้">🗑️ ล้างข้อมูล</button>
+            </div>
+          </div>
+
+          <!-- Stats 4 Cards -->
+          <div class="analyzer-stats">
+            <div class="analyzer-stat-card">
+              <span>API ที่เรียนรู้</span>
+              <strong id="endpointCount">0</strong>
+            </div>
+            <div class="analyzer-stat-card">
+              <span>Request ทั้งหมด</span>
+              <strong id="requestCount">0</strong>
+            </div>
+            <div class="analyzer-stat-card">
+              <span>หมวดที่พบ</span>
+              <strong id="categoryCount">0</strong>
+            </div>
+            <div class="analyzer-stat-card">
+              <span>ล่าสุด</span>
+              <strong id="lastSeen">-</strong>
+            </div>
+          </div>
+
+          <!-- Toolbar with Search, Category Filter, Method Filter, and Tabs -->
+          <div class="analyzer-toolbar">
+            <input type="search" id="analyzerSearch" placeholder="🔍 ค้นหา URL, method, หมวดหมู่, ฟิลด์..." class="input-field">
+            <select id="analyzerCategoryFilter" class="select-field">
+              <option value="">ทุกหมวด</option>
+            </select>
+            <select id="analyzerMethodFilter" class="select-field">
+              <option value="">ทุก Method</option>
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="PATCH">PATCH</option>
+              <option value="DELETE">DELETE</option>
+            </select>
+            <div class="analyzer-tabs">
+              <button type="button" class="analyzer-tab active" data-tab="endpoints">API ที่เรียนรู้</button>
+              <button type="button" class="analyzer-tab" data-tab="history">ประวัติ Request</button>
+            </div>
+          </div>
+
+          <!-- 2-Column Workspace -->
+          <div class="analyzer-workspace">
+            <div class="analyzer-list-pane">
+              <div id="endpointList" class="endpoint-list"></div>
+              <div id="historyList" class="history-list" style="display:none;"></div>
+            </div>
+            <aside id="detailPane" class="analyzer-detail-pane">
+              <div class="empty-detail">เลือก API ทางด้านซ้ายเพื่อดูรายละเอียด</div>
+            </aside>
+          </div>
+        </section>
+
+        <!-- 8. SETTINGS -->
+        <section id="view-settings" class="view-pane">
+          <div class="view-header">
+            <div class="view-title">
+              <h1>ตั้งค่าระบบ & การแจ้งเตือน</h1>
+              <p>กำหนดการแจ้งเตือนเหตุการณ์และเงื่อนไขการทำงาน</p>
+            </div>
+            <div class="header-actions">
+              <button id="btnSaveSettings" class="btn btn-accent">💾 บันทึกการตั้งค่า</button>
+            </div>
+          </div>
+
+          <div class="form-card">
+            <h3 style="font-size:15px; margin-bottom:14px;">🔔 การแจ้งเตือนเหตุการณ์ (Realtime Notifications)</h3>
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">
+              ระบบจะตรวจจับเหตุการณ์จาก Server (แม้เกิดจากเครื่องอื่น/มือถือลูกค้า) และแจ้งเตือนพร้อมเสียงทันที
+            </p>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+              <div class="card" style="padding:14px;">
+                <label class="switch-label">
+                  <input type="checkbox" id="setNotifyDeposit" class="switch-input" checked>
+                  <span class="switch-slider"></span>
+                  <div>
+                    <strong style="display:block; font-size:13px; color:var(--text-main);">📥 รายการฝากเงิน</strong>
+                    <small style="color:var(--text-muted); font-size:11px;">แจ้งเตือนเมื่อมีเงินฝากเข้าจากลูกค้า</small>
+                  </div>
+                </label>
+              </div>
+
+              <div class="card" style="padding:14px;">
+                <label class="switch-label">
+                  <input type="checkbox" id="setNotifyWithdraw" class="switch-input" checked>
+                  <span class="switch-slider"></span>
+                  <div>
+                    <strong style="display:block; font-size:13px; color:var(--text-main);">📤 รายการถอนเงิน</strong>
+                    <small style="color:var(--text-muted); font-size:11px;">แจ้งเตือนเมื่อมีรายการขอถอนเงินใหม่</small>
+                  </div>
+                </label>
+              </div>
+
+              <div class="card" style="padding:14px;">
+                <label class="switch-label">
+                  <input type="checkbox" id="setNotifyManual" class="switch-input" checked>
+                  <span class="switch-slider"></span>
+                  <div>
+                    <strong style="display:block; font-size:13px; color:var(--text-main);">⚡ เติม/ลด เครดิตแมนนวล</strong>
+                    <small style="color:var(--text-muted); font-size:11px;">แจ้งเตือนเมื่อแอดมินเครื่องอื่นปรับเครดิต</small>
+                  </div>
+                </label>
+              </div>
+
+              <div class="card" style="padding:14px;">
+                <label class="switch-label">
+                  <input type="checkbox" id="setNotifyBonus" class="switch-input" checked>
+                  <span class="switch-slider"></span>
+                  <div>
+                    <strong style="display:block; font-size:13px; color:var(--text-main);">🎁 เติมโบนัส / แลกแต้ม</strong>
+                    <small style="color:var(--text-muted); font-size:11px;">แจ้งเตือนเมื่อมีการรับโบนัสหรือขอแลกของรางวัล</small>
+                  </div>
+                </label>
+              </div>
+
+              <div class="card" style="padding:14px;">
+                <label class="switch-label">
+                  <input type="checkbox" id="setNotifyMemberEdit" class="switch-input" checked>
+                  <span class="switch-slider"></span>
+                  <div>
+                    <strong style="display:block; font-size:13px; color:var(--text-main);">✏️ แก้ไขข้อมูลสมาชิก</strong>
+                    <small style="color:var(--text-muted); font-size:11px;">แจ้งเตือนเมื่อมีเครื่องอื่นแก้ไขข้อมูลหรือรหัสผ่าน</small>
+                  </div>
+                </label>
+              </div>
+
+              <div class="card" style="padding:14px; grid-column:span 2;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:10px;">
+                  <label class="switch-label" style="margin:0;">
+                    <input type="checkbox" id="setSoundEnabled" class="switch-input" checked>
+                    <span class="switch-slider"></span>
+                    <div>
+                      <strong style="display:block; font-size:13px; color:var(--text-main);">🔊 เสียงแจ้งเตือนแยกประเภท (Custom Audio Chimes)</strong>
+                      <small style="color:var(--text-muted); font-size:11px;">เล่นเสียงเฉพาะตัวแยกตามประเภทเหตุการณ์</small>
+                    </div>
+                  </label>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:12px; color:var(--text-muted);">ระดับเสียง:</span>
+                    <input type="range" id="soundVolume" min="0" max="100" value="80" style="width:110px; accent-color:var(--accent);">
+                    <span id="soundVolumeText" style="font-size:12px; font-weight:700; width:38px;">80%</span>
+                  </div>
+                </div>
+                <div class="sound-test-grid" style="display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-top:8px;">
+                  <button type="button" id="btnTestDeposit" class="btn btn-secondary btn-sm" style="font-size:11px; padding:6px 8px;">📥 ฝากเงิน</button>
+                  <button type="button" id="btnTestWithdraw" class="btn btn-secondary btn-sm" style="font-size:11px; padding:6px 8px;">📤 ถอนเงิน</button>
+                  <button type="button" id="btnTestHighRisk" class="btn btn-danger btn-sm" style="font-size:11px; padding:6px 8px;">🚨 เสี่ยงสูง</button>
+                  <button type="button" id="btnTestMember" class="btn btn-secondary btn-sm" style="font-size:11px; padding:6px 8px;">✏️ แก้ไขข้อมูล</button>
+                </div>
+              </div>
+
+              <div class="card" style="padding:14px;">
+                <label class="switch-label">
+                  <input type="checkbox" id="setDarkMode" class="switch-input" checked>
+                  <span class="switch-slider"></span>
+                  <div>
+                    <strong style="display:block; font-size:13px; color:var(--text-main);">🌙 โหมดมืด (Dark Theme)</strong>
+                    <small style="color:var(--text-muted); font-size:11px;">เปิดโหมดกลางคืน (สีเข้ม) หรือปิดเพื่อใช้โหมดกลางวัน (สีสว่าง)</small>
+                  </div>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-card" style="margin-top:16px;">
+            <h3 style="font-size:15px; margin-bottom:14px;">🛡️ ระบบตรวจจับความเสี่ยง & ป้องกันทุจริต (Smart Risk & Fraud Detection)</h3>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+              <div class="card" style="padding:14px;">
+                <label class="switch-label">
+                  <input type="checkbox" id="setRiskBankChange24h" class="switch-input" checked>
+                  <span class="switch-slider"></span>
+                  <div>
+                    <strong style="display:block; font-size:13px; color:var(--text-main);">⚠️ ตรวจจับเปลี่ยนบัญชี < 24 ชม.</strong>
+                    <small style="color:var(--text-muted); font-size:11px;">ขึ้นเตือนเสี่ยงสูงทันที และหยุด Auto Approve รายการนี้เพื่อความปลอดภัย</small>
+                  </div>
+                </label>
+              </div>
+
+              <div class="card" style="padding:14px;">
+                <label class="switch-label">
+                  <input type="checkbox" id="setRiskRapidWithdraw" class="switch-input" checked>
+                  <span class="switch-slider"></span>
+                  <div>
+                    <strong style="display:block; font-size:13px; color:var(--text-main);">⚠️ ตรวจจับการถอนซ้ำถี่ (ใน 5 นาที)</strong>
+                    <small style="color:var(--text-muted); font-size:11px;">แจ้งเตือนเมื่อยูสเซอร์ยื่นถอนตั้งแต่ 2 รายการขึ้นไป</small>
+                  </div>
+                </label>
+              </div>
+
+              <div class="card" style="padding:14px; grid-column:span 2;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <div>
+                    <strong style="display:block; font-size:13px; color:var(--text-main);">💰 ขีดจำกัดแจ้งเตือนถอนยอดใหญ่ (บาท)</strong>
+                    <small style="color:var(--text-muted); font-size:11px;">รายการถอนที่เกินยอดนี้จะติดป้ายเตือน "ถอนยอดใหญ่" เพื่อให้แอดมินตรวจสอบ</small>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <input type="number" id="setRiskLargeAmount" class="input-field" value="10000" min="1000" step="1000" style="width:130px; height:34px;">
+                    <span style="font-size:12px; color:var(--text-muted);">บาท</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-card" style="margin-top:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+              <div>
+                <h3 style="font-size:15px; margin-bottom:4px;">🚀 เวอร์ชันโปรแกรม (NK Helper Desktop)</h3>
+                <span style="font-size:12.5px; color:var(--accent); font-weight:700;">เวอร์ชันปัจจุบัน: v3.8.33</span>
+                <p style="font-size:11px; color:var(--text-muted); margin-top:2px;">รองรับเมนูเว็บ Agent (ag.ismgaming6.com), แก้ไขช่องกรอก วันที่/เวลา แบบฟอร์ม, บันทึกฟอร์มปลอดภัย Offline First</p>
+              </div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" id="btnShowShortcutsModal" class="btn btn-secondary">⌨️ ดูปุ่มลัดคีย์บอร์ด</button>
+                <button type="button" id="btnCheckAppUpdate" class="btn btn-accent">🔄 ตรวจหาอัปเดต</button>
+                <button type="button" id="btnFactoryReset" class="btn btn-danger" title="ล้างประวัติ แคช และการตั้งค่าทั้งหมดเหมือนเพิ่งติดตั้งใหม่">🗑️ คืนค่าโรงงาน (ล้างข้อมูล)</button>
+              </div>
+            </div>
+          </div>
+
+
+
+          <div class="form-card" style="margin-top:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+              <h3 style="font-size:15px; margin:0;">🌐 การเชื่อมต่อระบบ BackOffice & ตัวกรองเว็บไซต์ (Target Website)</h3>
+              <span id="badgeTargetSiteStatus" class="badge-status success" style="font-size:11.5px; padding:3px 10px;">🟢 เชื่อมต่อข้อมูลและแยกตามบ้านอัตโนมัติ</span>
+            </div>
+
+            <div style="background:var(--bg-main); border:1px solid var(--border-subtle); border-radius:10px; padding:16px; margin-bottom:14px;">
+              <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:16px;">
+                <div>
+                  <span style="font-size:12px; color:var(--text-muted); display:block;">เว็บไซต์ที่กำลังเชื่อมต่อ (Target Website):</span>
+                  <div style="margin-top:4px; font-size:17px; font-weight:800; color:var(--accent); display:flex; align-items:center; gap:8px;">
+                    <span id="lblTargetSiteName">-</span>
+                    <span style="font-size:12px; color:var(--text-dim); font-weight:normal;" id="lblTargetWebsiteId"></span>
+                  </div>
+                </div>
+                <div>
+                  <span style="font-size:12px; color:var(--text-muted); display:block;">URL ระบบ BackOffice (สำหรับเปิดดูในโปรแกรม):</span>
+                  <div style="margin-top:4px; font-size:13.5px; font-family:monospace; color:var(--text); word-break:break-all;">
+                    <span id="lblTargetBackofficeUrl">-</span>
+                  </div>
+                </div>
+              </div>
+              <small style="color:var(--text-dim); font-size:11px; display:block; margin-top:10px; border-top:1px solid var(--border-subtle); padding-top:8px;">
+                🛡️ ระบบระบุเว็บและ URL อัตโนมัติตามสิทธิ์บัญชีผู้ใช้ที่ล็อกอิน คัดกรองข้อมูลเฉพาะบ้านนี้อย่างสมบูรณ์ ข้อมูลบ้านอื่นจะไม่ถูกนำมาปะปน
+              </small>
+            </div>
+
+            <div style="display:flex; gap:16px; align-items:center; justify-content:flex-end;">
+              <div class="form-group" style="max-width:260px; min-width:200px; margin-bottom:0;">
+                <label style="font-size:12px; margin-bottom:4px;">รอบความถี่ในการตรวจ Server</label>
+                <select id="setObserverInterval" class="select-field">
+                  <option value="10">ทุก 10 วินาที (เร็วสุด)</option>
+                  <option value="15" selected>ทุก 15 วินาที (แนะนำ)</option>
+                  <option value="30">ทุก 30 วินาที</option>
+                  <option value="60">ทุก 60 วินาที</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 9. EMBEDDED WEBVIEW (BackOffice) -->
+        <section id="view-webview" class="webview-container">
+          <div class="webview-toolbar">
+            <div class="toolbar-nav-group" style="display:inline-flex; align-items:center; gap:4px;">
+              <button type="button" id="btnWebBack" class="btn btn-secondary btn-sm" style="height:28px; padding:0 8px;" title="ย้อนกลับ">◀</button>
+              <button type="button" id="btnWebForward" class="btn btn-secondary btn-sm" style="height:28px; padding:0 8px;" title="ไปข้างหน้า">▶</button>
+              <button type="button" id="btnWebReload" class="btn btn-secondary btn-sm" style="height:28px; padding:0 8px;" title="รีโหลดหน้าเว็บ (Ctrl + R)">↻</button>
+            </div>
+
+            <!-- Zoom Controls -->
+            <div class="toolbar-zoom-group" style="display:inline-flex; align-items:center; gap:2px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:6px; padding:1px 3px; margin-left:2px;">
+              <button type="button" id="btnWebZoomOut" class="btn btn-secondary btn-sm" style="height:26px; padding:0 6px; font-size:11px;" title="ย่อหน้าจอ (Ctrl + -)">🔍−</button>
+              <button type="button" id="btnWebZoomReset" class="btn btn-secondary btn-sm" style="height:26px; min-width:44px; padding:0 5px; font-size:11px; font-weight:700;" title="คลิกเพื่อรีเซ็ต 100% (Ctrl + 0)">100%</button>
+              <button type="button" id="btnWebZoomIn" class="btn btn-secondary btn-sm" style="height:26px; padding:0 6px; font-size:11px;" title="ขยายหน้าจอ (Ctrl + +)">🔍+</button>
+              <button type="button" id="btnWebZoomFit" class="btn btn-secondary btn-sm" style="height:26px; padding:0 8px; font-size:11px; color:var(--accent); font-weight:700;" title="ปรับย่อ 80% ให้เห็นครบทุกแถวพอดีจอโดยไม่ต้องเลื่อน">📐 พอดีจอ (80%)</button>
+            </div>
+
+            <!-- Capture / Screenshot Group -->
+            <div class="toolbar-capture-group" style="display:inline-flex; align-items:center; gap:4px; margin-left:2px;">
+              <button type="button" id="btnWebCapture" class="btn btn-accent btn-sm" style="height:28px; padding:0 10px; font-size:11.5px; display:inline-flex; align-items:center; gap:5px; font-weight:700;" title="แคปภาพ Dashboard ครบทุกแถว และคัดลอกลง Clipboard ทันที (นำไปกด Ctrl + V วางใน LINE ได้เลย)">
+                <span>📸</span>
+                <span>แคปภาพ Dashboard</span>
+              </button>
+              <button type="button" id="btnWebSaveCapture" class="btn btn-secondary btn-sm" style="height:28px; padding:0 8px; font-size:11px;" title="บันทึกภาพหน้าจอเป็นไฟล์ .PNG ลงคอมพิวเตอร์">
+                💾 บันทึกรูป
+              </button>
+            </div>
+
+            <div style="margin-left:auto; display:inline-flex; align-items:center; gap:6px;">
+              <button type="button" id="btnWebThemeToggle" class="btn btn-secondary btn-sm" style="height:28px; padding:0 9px; font-size:11px;" title="สลับโหมดมืด / สว่าง ของเว็บ BackOffice">🌙 โหมดเว็บ</button>
+              <button type="button" id="btnWebAutoLogin" class="btn btn-secondary btn-sm" style="height:28px; padding:0 9px; font-size:11px;" title="กรอกรหัสและกดล็อกอินเว็บ BackOffice ทันที">🔑 ล็อกอินอัตโนมัติ</button>
+              <button type="button" id="btnToggleWebviewFullscreen" class="btn btn-secondary btn-sm" style="height:28px; padding:0 9px; font-size:11px;" title="ขยายเต็มหน้าต่าง / ย่อหน้าต่าง (Esc เพื่อออก)">⛶ ขยายเต็ม</button>
+            </div>
+          </div>
+          <webview id="boWebview" src="about:blank" allowpopups partition="persist:nkhelper"></webview>
+        </section>
+
+        <!-- 10. EMBEDDED WEBVIEW (SwiftPay Merchant Portal) -->
+        <section id="view-swiftpay-webview" class="webview-container">
+          <div class="webview-toolbar">
+            <div class="toolbar-nav-group" style="display:inline-flex; align-items:center; gap:4px;">
+              <button type="button" id="btnSpWebBack" class="btn btn-secondary btn-sm" style="height:28px; padding:0 8px;" title="ย้อนกลับ">◀</button>
+              <button type="button" id="btnSpWebForward" class="btn btn-secondary btn-sm" style="height:28px; padding:0 8px;" title="ไปข้างหน้า">▶</button>
+              <button type="button" id="btnSpWebReload" class="btn btn-secondary btn-sm" style="height:28px; padding:0 8px;" title="รีโหลดหน้าเว็บ">↻</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px; flex:1; max-width:380px; margin-left:4px;">
+              <span style="font-size:12px;">🔗</span>
+              <input type="text" id="txtSpWebUrl" class="input-field" style="height:28px; font-size:11.5px; padding:0 8px; flex:1;" placeholder="https://userswiftpay.kcta.app/#/dashboard/workbench" value="https://userswiftpay.kcta.app/#/dashboard/workbench">
+              <button type="button" id="btnSpWebGo" class="btn btn-secondary btn-sm" style="height:28px; padding:0 8px; font-size:11px;">ไป</button>
+            </div>
+
+            <!-- SwiftPay Zoom Controls -->
+            <div class="toolbar-zoom-group" style="display:inline-flex; align-items:center; gap:2px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:6px; padding:1px 3px; margin-left:2px;">
+              <button type="button" id="btnSpZoomOut" class="btn btn-secondary btn-sm" style="height:26px; padding:0 6px; font-size:11px;" title="ย่อหน้าจอ (Ctrl + -)">🔍−</button>
+              <button type="button" id="btnSpZoomReset" class="btn btn-secondary btn-sm" style="height:26px; min-width:44px; padding:0 5px; font-size:11px; font-weight:700;" title="คลิกเพื่อรีเซ็ต 100% (Ctrl + 0)">100%</button>
+              <button type="button" id="btnSpZoomIn" class="btn btn-secondary btn-sm" style="height:26px; padding:0 6px; font-size:11px;" title="ขยายหน้าจอ (Ctrl + +)">🔍+</button>
+              <button type="button" id="btnSpZoomFit" class="btn btn-secondary btn-sm" style="height:26px; padding:0 8px; font-size:11px; color:var(--accent); font-weight:700;" title="ย่อพอดีจอ 80%">📐 พอดีจอ</button>
+            </div>
+
+            <button type="button" id="btnSpCapture" class="btn btn-secondary btn-sm" style="height:28px; padding:0 8px; font-size:11px; display:inline-flex; align-items:center; gap:4px;" title="แคปภาพหน้าจอ SwiftPay และคัดลอกลง Clipboard (Ctrl+V ใน LINE ได้เลย)">
+              <span>📸</span>
+              <span>แคปภาพ</span>
+            </button>
+
+            <button type="button" id="btnSpSyncBalance" class="btn btn-accent btn-sm" style="height:28px; padding:0 10px; font-size:11.5px; margin-left:auto; display:flex; align-items:center; gap:5px;" title="ตรวจจับและดึงยอดเงินจากหน้าจอนี้เข้า Dashboard ทันที">
+              <span>💰</span>
+              <span>ดึงยอดเงิน</span>
+            </button>
+            <button type="button" id="btnToggleSpFullscreen" class="btn btn-secondary btn-sm" style="height:28px; padding:0 9px; font-size:11px; margin-left:4px;" title="ขยายเต็มหน้าต่าง / ย่อหน้าต่าง (Esc เพื่อออก)">⛶ ขยายเต็ม</button>
+          </div>
+          <webview id="spWebview" src="about:blank" allowpopups partition="persist:swiftpay"></webview>
+        </section>
+
+        <!-- 10.1 EMBEDDED WEBVIEW (Agent Portal) -->
+        <section id="view-agent-webview" class="webview-container">
+          <div class="webview-toolbar">
+            <div class="toolbar-nav-group" style="display:inline-flex; align-items:center; gap:4px;">
+              <button type="button" id="btnAgWebBack" class="btn btn-secondary btn-sm" style="height:28px; padding:0 8px;" title="ย้อนกลับ">◀</button>
+              <button type="button" id="btnAgWebForward" class="btn btn-secondary btn-sm" style="height:28px; padding:0 8px;" title="ไปข้างหน้า">▶</button>
+              <button type="button" id="btnAgWebReload" class="btn btn-secondary btn-sm" style="height:28px; padding:0 8px;" title="รีโหลดหน้าเว็บ">↻</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px; flex:1; max-width:380px; margin-left:4px;">
+              <span style="font-size:12px;">🔗</span>
+              <input type="text" id="txtAgWebUrl" class="input-field" style="height:28px; font-size:11.5px; padding:0 8px; flex:1;" placeholder="https://ag.ismgaming6.com/" value="https://ag.ismgaming6.com/">
+              <button type="button" id="btnAgWebGo" class="btn btn-secondary btn-sm" style="height:28px; padding:0 8px; font-size:11px;">ไป</button>
+            </div>
+
+            <!-- Agent Zoom Controls -->
+            <div class="toolbar-zoom-group" style="display:inline-flex; align-items:center; gap:2px; background:rgba(255,255,255,0.04); border:1px solid var(--border-subtle); border-radius:6px; padding:1px 3px; margin-left:2px;">
+              <button type="button" id="btnAgZoomOut" class="btn btn-secondary btn-sm" style="height:26px; padding:0 6px; font-size:11px;" title="ย่อหน้าจอ (Ctrl + -)">🔍−</button>
+              <button type="button" id="btnAgZoomReset" class="btn btn-secondary btn-sm" style="height:26px; min-width:44px; padding:0 5px; font-size:11px; font-weight:700;" title="คลิกเพื่อรีเซ็ต 100% (Ctrl + 0)">100%</button>
+              <button type="button" id="btnAgZoomIn" class="btn btn-secondary btn-sm" style="height:26px; padding:0 6px; font-size:11px;" title="ขยายหน้าจอ (Ctrl + +)">🔍+</button>
+              <button type="button" id="btnAgZoomFit" class="btn btn-secondary btn-sm" style="height:26px; padding:0 8px; font-size:11px; color:var(--accent); font-weight:700;" title="ย่อพอดีจอ 80%">📐 พอดีจอ</button>
+            </div>
+
+            <button type="button" id="btnAgCapture" class="btn btn-secondary btn-sm" style="height:28px; padding:0 8px; font-size:11px; display:inline-flex; align-items:center; gap:4px;" title="แคปภาพหน้าจอ Agent และคัดลอกลง Clipboard (Ctrl+V ใน LINE ได้เลย)">
+              <span>📸</span>
+              <span>แคปภาพ</span>
+            </button>
+
+            <button type="button" id="btnToggleAgFullscreen" class="btn btn-secondary btn-sm" style="height:28px; padding:0 9px; font-size:11px; margin-left:auto;" title="ขยายเต็มหน้าต่าง / ย่อหน้าต่าง (Esc เพื่อออก)">⛶ ขยายเต็ม</button>
+          </div>
+          <webview id="agWebview" src="about:blank" allowpopups partition="persist:agent"></webview>
+        </section>
+        <!-- 11. FORMS (แบบฟอร์ม) -->
+        <section id="view-forms" class="view-pane">
+          <div class="view-header">
+            <div class="view-title">
+              <h1>📝 ระบบสร้างแบบฟอร์ม</h1>
+              <p>เลือกแบบฟอร์ม กรอกข้อมูล และคัดลอกข้อความไปใช้งาน</p>
+            </div>
+            <div class="header-actions" style="display: flex; align-items: center; gap: 8px;">
+              <button type="button" id="btnRefreshForms" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 7px; border: 1px solid rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.1); color: #38bdf8; padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;" title="รีเฟรชดึงแบบฟอร์มล่าสุดจากเซิร์ฟเวอร์">
+                <span class="refresh-spinner" style="font-size: 14px; display: inline-block;">🔄</span>
+                <span>รีเฟรชแบบฟอร์ม</span>
+              </button>
+              <button type="button" id="btnOpenFormGuide" class="btn btn-secondary" style="display: inline-flex; align-items: center; gap: 7px; border: 1px solid rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.1); color: #f59e0b; padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s;" onclick="window.openModal('modalFormGuide')" title="ดูคู่มือและวิธีใช้งาน Smart+ Form อย่างละเอียด">
+                <span style="font-size: 16px;">📖</span>
+                <span>วิธีใช้งาน</span>
+                <span class="badge" style="background: rgba(245,158,11,0.25); color: #fbbf24; font-size: 10px; padding: 2px 7px; border-radius: 10px; border: 1px solid rgba(245,158,11,0.3); font-weight: 600;">Smart+</span>
+              </button>
+            </div>
+          </div>
+          
+          <div style="display: flex; gap: 16px; height: calc(100vh - 120px); overflow: hidden;">
+            <!-- Column 1: แบบฟอร์มที่สร้าง (Form Templates List) -->
+            <div style="width: 270px; min-width: 250px; display: flex; flex-direction: column; gap: 10px; background: var(--bg-surface); padding: 16px; border-radius: 12px; border: 1px solid var(--border-subtle); overflow: hidden;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <h3 style="font-size: 14px; color: #fff; margin: 0; font-weight: 600;">1. แบบฟอร์ม</h3>
+                  <span id="lblFormCountBadge" style="font-size: 11px; background: rgba(255,255,255,0.08); padding: 1px 7px; border-radius: 10px; color: var(--text-muted); font-weight: 600;">0</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <button id="btnQuickRefreshForms" class="btn btn-secondary btn-sm" style="height: 28px; width: 28px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 12px;" title="รีเฟรชดึงจากคลาวด์">🔄</button>
+                  <button id="btnCreateForm" class="btn btn-accent btn-sm" style="height: 28px; padding: 0 10px; font-size: 12px; font-weight: 600;">+ สร้าง</button>
+                </div>
+              </div>
+
+              <!-- Search Bar for Forms -->
+              <div style="position: relative;">
+                <input type="text" id="inputSearchForms" class="input-field" placeholder="🔍 ค้นหาฟอร์ม..." style="height: 32px; font-size: 12px; padding-left: 28px; background: rgba(0,0,0,0.25);">
+                <span style="position: absolute; left: 9px; top: 7px; font-size: 12px; pointer-events: none; opacity: 0.6;">🔍</span>
+              </div>
+
+              <div id="lblFormsSyncStatus" style="font-size: 10.5px; color: var(--text-dim); display: flex; align-items: center; gap: 4px;">
+                <span style="color:#10b981;">●</span> เชื่อมต่อออนไลน์
+              </div>
+
+              <div id="formTemplateList" style="flex: 1; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding-right: 2px;">
+                <!-- Templates will be rendered here via JS -->
+              </div>
+            </div>
+
+            <!-- Column 2: ช่องกรอกตัวข้อมูลตัวแปร (Inputs & Variable Fields) -->
+            <div id="formGeneratorCenterCol" style="flex: 1.15; min-width: 320px; display: flex; flex-direction: column; gap: 14px; background: var(--bg-surface); padding: 18px; border-radius: 12px; border: 1px solid var(--border-subtle); overflow-y: auto;">
+              
+              <div id="formGeneratorArea" style="display: none; flex-direction: column; gap: 14px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-subtle); padding-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+                  <div>
+                    <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600; letter-spacing: 0.5px;">2. ช่องกรอกข้อมูลตัวแปร</div>
+                    <h2 id="formGeneratorTitle" style="font-size: 18px; color: var(--accent); margin: 2px 0 0 0; font-weight: 700;">ชื่อแบบฟอร์ม</h2>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <button type="button" id="btnClearCurrentInputs" class="btn btn-secondary btn-sm" style="font-size: 12px; height: 30px; color: #f87171; border-color: rgba(239,68,68,0.3); background: rgba(239,68,68,0.08);" title="ล้างข้อมูลที่กรอกทั้งหมดในฟอร์มนี้เพื่อเริ่มกรอกใหม่">
+                      🗑️ ล้างค่าที่กรอก
+                    </button>
+                    <button type="button" id="btnEditForm" class="btn btn-secondary btn-sm" style="font-size: 12px; height: 30px;">
+                      ⚙️ แก้ไขฟอร์มนี้
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Dynamic Inputs Grid -->
+                <div id="formDynamicInputs" style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                  <!-- Inputs & Multi-category Smart Items will be rendered here -->
+                </div>
+
+                <div style="font-size: 11.5px; color: var(--text-dim); display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: rgba(16,185,129,0.05); border-radius: 8px; border: 1px dashed rgba(16,185,129,0.2);">
+                  <span style="color: #10b981;">💾</span>
+                  <span>ระบบบันทึกค่าที่กรอกลงเครื่องอัตโนมัติ (Autosave) สามารถสลับหน้าจอหรือคัดลอกข้อความอื่นได้ ข้อมูลไม่หายแน่นอน</span>
+                </div>
+              </div>
+
+              <!-- Placeholder when no form selected -->
+              <div id="formEmptyState" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); text-align: center; padding: 40px 20px;">
+                <div style="font-size: 48px; margin-bottom: 12px; opacity: 0.7;">📄</div>
+                <h3 style="font-size: 16px; color: #fff; margin: 0 0 6px 0;">ยังไม่ได้เลือกแบบฟอร์ม</h3>
+                <p style="font-size: 13px; color: var(--text-muted); max-width: 280px; margin: 0;">กรุณาคลิกเลือกแบบฟอร์มที่ต้องการใช้งานจากเมนูด้านซ้าย (คอลัมน์ 1)</p>
+              </div>
+
+            </div>
+
+            <!-- Column 3: Card แสดงตัวอย่าง (Live Preview Card) -->
+            <div id="formGeneratorPreviewCol" style="flex: 1; min-width: 330px; max-width: 460px; display: flex; flex-direction: column; background: var(--bg-surface); padding: 18px; border-radius: 12px; border: 1px solid var(--border-subtle); overflow: hidden;">
+              
+              <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-subtle); padding-bottom: 12px; margin-bottom: 12px;">
+                <div>
+                  <div style="font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 600; letter-spacing: 0.5px;">3. Card แสดงตัวอย่างข้อความ</div>
+                  <h3 style="font-size: 15px; color: #fff; margin: 2px 0 0 0; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                    <span>👁️ ตัวอย่างสด</span>
+                    <span id="lblPreviewFormTag" style="font-size: 11px; background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3); padding: 1px 7px; border-radius: 10px; font-weight: normal;">Live</span>
+                  </h3>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span id="lblCharCount" style="font-size: 11px; color: var(--text-dim);" title="จำนวนตัวอักษร">0 ตัวอักษร</span>
+                </div>
+              </div>
+
+              <!-- Options Bar -->
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; background: rgba(0,0,0,0.2); padding: 6px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; margin: 0; font-size: 12px; color: var(--text-muted);" title="ตัดเครื่องหมาย ** ออกเพื่อส่งในแอป LINE ได้อย่างสะอาดตา">
+                  <input type="checkbox" id="chkFormatPlainLine" style="cursor: pointer; margin: 0;">
+                  <span>โหมดตัด ** สำหรับ LINE</span>
+                </label>
+                <span style="font-size: 11px; color: #10b981; font-weight: 500;">⚡ อัปเดตสด</span>
+              </div>
+
+              <!-- Textarea Result (Full Height) -->
+              <div style="flex: 1; display: flex; flex-direction: column; min-height: 250px; margin-bottom: 14px;">
+                <textarea id="txtFormResult" class="input-field" style="width: 100%; height: 100%; flex: 1; font-family: 'Kanit', sans-serif; font-size: 13.5px; line-height: 1.55; padding: 14px; resize: none; background: rgba(0,0,0,0.3); border: 1px solid var(--border-subtle); border-radius: 8px; color: #f1f5f9;" placeholder="ข้อความแบบฟอร์มจะแสดงที่นี่แบบเรียลไทม์..." readonly></textarea>
+              </div>
+
+              <!-- Big Copy Button Action -->
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <button type="button" id="btnCopyFormResult" class="btn btn-accent" style="height: 44px; font-size: 14px; font-weight: 700; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.25); border-radius: 8px; transition: all 0.2s;">
+                  📋 คัดลอกข้อความ (Copy)
+                </button>
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-dim); padding: 0 4px;">
+                  <span>พร้อมวางใน LINE / Telegram ทันที</span>
+                  <span id="lblLineCount">0 บรรทัด</span>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+  <!-- Realtime Toast Notifications Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- Modal: Turnover & Member Audit -->
+  <div id="modalMemberAudit" class="modal-overlay" style="display:none;">
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <div class="modal-title">
+          <h2>🔍 ตรวจสอบ Turnover & ข้อมูลสมาชิก</h2>
+          <span id="auditMemberSubtitle" class="modal-subtitle">-</span>
+        </div>
+        <button type="button" class="modal-close" onclick="window.closeModal('modalMemberAudit')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="audit-grid">
+          <div class="audit-stat-card">
+            <span class="audit-stat-label">ยอดเทิร์นที่ต้องทำ</span>
+            <strong id="auditTurnoverReq" class="audit-stat-value text-accent">฿0.00</strong>
+          </div>
+          <div class="audit-stat-card">
+            <span class="audit-stat-label">เทิร์นโอเวอร์ปัจจุบัน</span>
+            <strong id="auditTurnoverBet" class="audit-stat-value text-success">฿0.00</strong>
+          </div>
+          <div class="audit-stat-card">
+            <span class="audit-stat-label">เทิร์นที่ยังขาด</span>
+            <strong id="auditTurnoverRem" class="audit-stat-value">฿0.00</strong>
+          </div>
+          <div class="audit-stat-card">
+            <span class="audit-stat-label">ผลการประเมิน</span>
+            <div id="auditTurnoverStatus" class="audit-status-badge">กำลังโหลด...</div>
+          </div>
+        </div>
+
+        <div class="audit-member-details">
+          <div class="audit-detail-row">
+            <span><strong>ชื่อ-นามสกุล:</strong> <span id="auditFullName">-</span></span>
+            <span><strong>เบอร์โทรศัพท์:</strong> <span id="auditPhone">-</span></span>
+          </div>
+          <div class="audit-detail-row">
+            <span><strong>บัญชีธนาคาร:</strong> <span id="auditBank">-</span></span>
+            <span><strong>แต้มสะสม:</strong> <span id="auditPoints">0</span> แต้ม</span>
+          </div>
+          <div class="audit-detail-row">
+            <span><strong>ยอดฝากสะสม (ล่าสุด):</strong> <span id="auditTotalDeposit" class="text-success">฿0.00</span></span>
+            <span><strong>ยอดถอนสะสม (ล่าสุด):</strong> <span id="auditTotalWithdraw" class="text-warning">฿0.00</span></span>
+          </div>
+        </div>
+
+        <h4 style="margin:16px 0 8px; font-size:13px; color:var(--text-muted);">📜 รายการธุรกรรม 10 รายการล่าสุด</h4>
+        <div class="table-container" style="max-height:220px; overflow-y:auto;">
+          <table class="data-table" id="tableAuditTransactions">
+            <thead>
+              <tr>
+                <th style="width:130px;">เวลา</th>
+                <th style="width:100px;">ประเภท</th>
+                <th style="width:120px;">ยอดเงิน</th>
+                <th style="width:110px;">ธนาคาร</th>
+                <th style="width:90px;">สถานะ</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="window.closeModal('modalMemberAudit')">ปิดหน้าต่าง</button>
+        <button type="button" id="btnAuditApproveNow" class="btn btn-accent">✓ ดำเนินการอนุมัติถอน</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Confirm Approve Withdraw -->
+  <div id="modalConfirmApprove" class="modal-overlay" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <h2 style="color:var(--success);">✅ ยืนยันการอนุมัติถอนเงิน</h2>
+        </div>
+        <button type="button" class="modal-close" onclick="window.closeModal('modalConfirmApprove')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="color:var(--text-muted); font-size:12.5px; margin-bottom:14px; line-height:1.4;">
+          กรุณาตรวจสอบข้อมูลและเลือกเกตเวย์ผู้ให้บริการก่อนส่งคำสั่งอนุมัติ
+        </p>
+        <div class="confirm-box">
+          <div class="confirm-row">
+            <span class="confirm-label">รายการ ID:</span>
+            <strong id="approveModalTxId">#0</strong>
+          </div>
+          <div class="confirm-row">
+            <span class="confirm-label">ยูสเซอร์ / ลูกค้า:</span>
+            <strong id="approveModalUser">-</strong>
+          </div>
+          <div class="confirm-row">
+            <span class="confirm-label">ยอดเงินที่ถอน:</span>
+            <strong id="approveModalAmount" class="text-warning" style="font-size:18px;">฿0.00</strong>
+          </div>
+          <div class="confirm-row">
+            <span class="confirm-label">โอนไปยังบัญชี:</span>
+            <strong id="approveModalBank">-</strong>
+          </div>
+          <div id="approveModalRiskRow" class="confirm-row" style="display:none;">
+            <span class="confirm-label">ระดับความเสี่ยง:</span>
+            <span id="approveModalRiskBadge"></span>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:14px;">
+          <label style="font-size:12.5px; font-weight:700; color:var(--text-main); margin-bottom:6px;">
+            🏦 ผู้ให้บริการเกตเวย์ (Gateway Provider)
+          </label>
+          <select id="approveModalProvider" class="select-field" style="width:100%; font-size:13px; height:38px;">
+            <option value="crs">🏢 CRS (ส่งเข้าคิวให้ทีม CRS โอน)</option>
+            <option value="swiftpay">⚡ SwiftPay (สั่งเกตเวย์โอนเงินอัตโนมัติ)</option>
+          </select>
+          <small id="approveModalProviderHint" style="font-size:11px; color:var(--text-muted); display:block; margin-top:4px;">
+            ส่งรายการเข้าคิวกลางของ CRS เพื่อให้ทีมเจ้าหน้าที่ทำรายการโอน
+          </small>
+        </div>
+
+        <label class="confirm-checkbox-wrap" style="margin-top:14px; display:flex; gap:8px; align-items:center; cursor:pointer;">
+          <input type="checkbox" id="chkApproveSafety" style="width:16px; height:16px;">
+          <span style="font-size:12px; color:var(--text-main); font-weight:600;">ฉันได้ตรวจสอบความถูกต้องของยอดเงินและข้อมูลลูกค้าแล้ว</span>
+        </label>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="window.closeModal('modalConfirmApprove')">ยกเลิก</button>
+        <button type="button" id="btnExecuteApprove" class="btn btn-accent" disabled>✓ ยืนยันการอนุมัติ (ส่ง CRS)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Confirm Reject Withdraw -->
+  <div id="modalConfirmReject" class="modal-overlay" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <h2 style="color:var(--danger);">❌ ปฏิเสธรายการถอนเงิน</h2>
+        </div>
+        <button type="button" class="modal-close" onclick="window.closeModal('modalConfirmReject')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="confirm-box" style="margin-bottom:14px;">
+          <div class="confirm-row">
+            <span class="confirm-label">รายการ ID:</span>
+            <strong id="rejectModalTxId">#0</strong>
+          </div>
+          <div class="confirm-row">
+            <span class="confirm-label">ยูสเซอร์ / ลูกค้า:</span>
+            <strong id="rejectModalUser">-</strong>
+          </div>
+          <div class="confirm-row">
+            <span class="confirm-label">ยอดเงิน:</span>
+            <strong id="rejectModalAmount" class="text-danger" style="font-size:16px;">฿0.00</strong>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:12px;">
+          <label>เหตุผลในการปฏิเสธ</label>
+          <select id="rejectPresetReason" class="select-field" style="width:100%;">
+            <option value="เทิร์นโอเวอร์ไม่ครบตามเงื่อนไข">เทิร์นโอเวอร์ไม่ครบตามเงื่อนไข</option>
+            <option value="ข้อมูลบัญชีธนาคารไม่ถูกต้อง/ไม่ตรงชื่อ">ข้อมูลบัญชีธนาคารไม่ถูกต้อง/ไม่ตรงชื่อ</option>
+            <option value="พบความผิดปกติในการเล่น/เดิมพัน">พบความผิดปกติในการเล่น/เดิมพัน</option>
+            <option value="กรุณาติดต่อแอดมินทางไลน์">กรุณาติดต่อแอดมินทางไลน์</option>
+            <option value="other">ระบุเหตุผลอื่นๆ...</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="wrapRejectCustomNote" style="display:none;">
+          <label>หมายเหตุเพิ่มเติม (ถ้ามี)</label>
+          <textarea id="rejectCustomNote" class="input-field" rows="2" placeholder="ระบุเหตุผลที่จะบันทึกในระบบ..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="window.closeModal('modalConfirmReject')">ยกเลิก</button>
+        <button type="button" id="btnExecuteReject" class="btn btn-danger">✕ ยืนยันปฏิเสธรายการ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Instant Slip Preview Lightbox -->
+  <div id="modalSlipPreview" class="modal-overlay modal-lightbox" style="display:none;">
+    <div class="lightbox-container">
+      <div class="lightbox-toolbar">
+        <span class="lightbox-title">🧾 พรีวิวสลิปโอนเงิน</span>
+        <div class="lightbox-actions">
+          <button type="button" id="btnSlipZoomIn" class="btn btn-secondary btn-sm" title="ซูมเข้า">🔍+</button>
+          <button type="button" id="btnSlipZoomOut" class="btn btn-secondary btn-sm" title="ซูมออก">🔍−</button>
+          <button type="button" id="btnSlipDownload" class="btn btn-secondary btn-sm" title="เปิดดูเต็มรูป">🔗 เปิดดู</button>
+          <button type="button" class="modal-close" onclick="window.closeModal('modalSlipPreview')" title="ปิด (Esc)">✕</button>
+        </div>
+      </div>
+      <div class="lightbox-body">
+        <img id="slipPreviewImg" src="" alt="สลิปโอนเงิน">
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Keyboard Shortcuts Guide -->
+  <div id="modalShortcuts" class="modal-overlay" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <h2>⌨️ คู่มือปุ่มลัดคีย์บอร์ด (Keyboard Shortcuts)</h2>
+        </div>
+        <button type="button" class="modal-close" onclick="window.closeModal('modalShortcuts')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="shortcuts-grid">
+          <div class="shortcut-item">
+            <span class="kbd-wrap"><kbd>Ctrl</kbd> + <kbd>F</kbd></span>
+            <span>โฟกัสช่องค้นหาในหน้าปัจจุบันทันที</span>
+          </div>
+          <div class="shortcut-item">
+            <span class="kbd-wrap"><kbd>Ctrl</kbd> + <kbd>1</kbd> .. <kbd>9</kbd></span>
+            <span>สลับหน้าเมนูอย่างรวดเร็ว (1:ภาพรวม, 2:แจ้งเตือน, 3:ถอนเงิน...)</span>
+          </div>
+          <div class="shortcut-item">
+            <span class="kbd-wrap"><kbd>Ctrl</kbd> + <kbd>−</kbd> / <kbd>+</kbd></span>
+            <span>ย่อ / ขยาย หน้าเว็บ BackOffice & SwiftPay</span>
+          </div>
+          <div class="shortcut-item">
+            <span class="kbd-wrap"><kbd>Ctrl</kbd> + <kbd>0</kbd></span>
+            <span>รีเซ็ตขนาดหน้าจอเว็บกลับเป็น 100% ปกติ</span>
+          </div>
+          <div class="shortcut-item">
+            <span class="kbd-wrap"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd></span>
+            <span>แคปภาพ Dashboard ครบทุกแถว และคัดลอกลง Clipboard ทันที</span>
+          </div>
+          <div class="shortcut-item">
+            <span class="kbd-wrap"><kbd>M</kbd></span>
+            <span>ปิดเสียงแจ้งเตือน / หยุดเสียงกระดิ่งเตือนทันที</span>
+          </div>
+          <div class="shortcut-item">
+            <span class="kbd-wrap"><kbd>Esc</kbd></span>
+            <span>ปิดหน้าต่าง Pop-up ทุกชนิด / ออกจากโหมดเต็มจอ</span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="window.closeModal('modalShortcuts')">ปิดหน้าต่าง</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Form Builder -->
+  <div id="modalFormBuilder" class="modal-overlay" style="display:none; z-index:9999;">
+    <div class="modal-card modal-lg" style="display: flex; flex-direction: column; max-height: 90vh;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <h2 id="formBuilderTitle">📝 สร้าง/แก้ไข แบบฟอร์ม</h2>
+          <p>ตั้งค่าชื่อ ช่องกรอกข้อมูล และรูปแบบข้อความที่จะนำไปใช้</p>
+        </div>
+        <button type="button" class="modal-close" onclick="window.closeModal('modalFormBuilder')">✕</button>
+      </div>
+      <div class="modal-body" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px;">
+        <input type="hidden" id="formBuilderId">
+        
+        <div style="display: flex; gap: 12px; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); padding: 12px; border-radius: 8px;">
+          <div style="font-size: 20px;">💡</div>
+          <div style="font-size: 13px; color: var(--text);">
+            <b>ระบบสมาร์ทฟอร์ม:</b> พิมพ์รูปแบบฟอร์มของคุณในช่องด้านล่าง แล้วคลุมคำที่ต้องกรอกด้วย <code>&lt;คำ&gt;</code> หรือ <code>[คำ]</code><br>
+            ระบบจะดึงคำพวกนั้นมาสร้าง <b>ช่องกรอกข้อมูล</b> ด้านล่างให้โดยอัตโนมัติ!
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>ชื่อแบบฟอร์ม (แสดงในเมนูด้านซ้าย)</label>
+          <input type="text" id="inputFormName" class="input-field" placeholder="เช่น: แบบฟอร์มแจ้งปัญหา">
+        </div>
+
+        <div class="form-group" style="flex: 1; display: flex; flex-direction: column;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+            <label>รูปแบบข้อความ (Template) ของคุณ</label>
+            <div style="display: flex; gap: 4px; padding-bottom: 4px;" id="templateToolbar">
+              <button type="button" class="btn btn-secondary" style="padding: 2px 8px; font-size: 11px; font-weight: bold; height: 24px;" onclick="insertMarkdown('**', '**')" title="ตัวหนา (Telegram)">B</button>
+              <button type="button" class="btn btn-secondary" style="padding: 2px 8px; font-size: 11px; font-style: italic; height: 24px;" onclick="insertMarkdown('__', '__')" title="ตัวเอียง (Telegram)">I</button>
+              <button type="button" class="btn btn-secondary" style="padding: 2px 8px; font-size: 11px; height: 24px;" onclick="insertMarkdown('🔴', '')" title="สีแดง">🔴</button>
+              <button type="button" class="btn btn-secondary" style="padding: 2px 8px; font-size: 11px; height: 24px;" onclick="insertMarkdown('🟡', '')" title="สีเหลือง">🟡</button>
+              <button type="button" class="btn btn-secondary" style="padding: 2px 8px; font-size: 11px; height: 24px;" onclick="insertMarkdown('🟢', '')" title="สีเขียว">🟢</button>
+            </div>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 0 6px 0; border-top: 1px dashed var(--border-subtle); margin-top: 4px;">
+            <span style="font-size: 11px; color: var(--text-muted); align-self: center; margin-right: 4px;">แทรกแท็กด่วน:</span>
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 11px; height: 22px; padding: 0 6px; color: #60a5fa;" onclick="insertMarkdown('&lt;รายการ&gt;', '')" title="ตารางรายการแบบหลายแถว">📋 &lt;รายการ&gt;</button>
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 11px; height: 22px; padding: 0 6px; color: #60a5fa;" onclick="insertMarkdown('&lt;รายการ:วอเลท&gt;', '')" title="ตารางรายการแยกหมวด (เช่น วอเลท, บุคคล)">📋 &lt;รายการ:หมวด&gt;</button>
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 11px; height: 22px; padding: 0 6px; color: #10b981;" onclick="insertMarkdown('&lt;รวมยอด&gt;', '')" title="คำนวณผลรวมอัตโนมัติ">💰 &lt;รวมยอด&gt;</button>
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 11px; height: 22px; padding: 0 6px; color: #10b981;" onclick="insertMarkdown('&lt;รวม:วอเลท&gt;', '')" title="คำนวณผลรวมเฉพาะหมวด">💰 &lt;รวม:หมวด&gt;</button>
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 11px; height: 22px; padding: 0 6px; color: #ec4899;" onclick="insertMarkdown('&lt;คำนวณ: [ยอดเงิน] * 2.9 / 100&gt;', '')" title="สูตรคำนวณคณิตศาสตร์อัตโนมัติ เช่น ค่าธรรมเนียม, ยอดสุทธิ">🧮 &lt;คำนวณ:...&gt;</button>
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 11px; height: 22px; padding: 0 6px; color: #f59e0b;" onclick="insertMarkdown('&lt;เดือน&gt;', '')" title="เลือกเดือน">📅 &lt;เดือน&gt;</button>
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 11px; height: 22px; padding: 0 6px;" onclick="insertMarkdown('&lt;ชื่อเว็บ&gt;', '')" title="ดึงชื่อเว็บที่เข้าใช้งานอัตโนมัติ">🌐 &lt;ชื่อเว็บ&gt;</button>
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 11px; height: 22px; padding: 0 6px;" onclick="insertMarkdown('&lt;ปี พ.ศ.&gt;', '')" title="ปี พ.ศ. ปัจจุบันอัตโนมัติ">🗓️ &lt;ปี พ.ศ.&gt;</button>
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 11px; height: 22px; padding: 0 6px;" onclick="insertMarkdown('&lt;ชื่อแอดมิน&gt;', '')" title="ดึงชื่อแอดมินอัตโนมัติ">👤 &lt;ชื่อแอดมิน&gt;</button>
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 11px; height: 22px; padding: 0 6px;" onclick="insertMarkdown('&lt;วันที่&gt;', '')" title="วันที่ปัจจุบัน">📅 &lt;วันที่&gt;</button>
+            <button type="button" class="btn btn-secondary btn-sm" style="font-size: 11px; height: 22px; padding: 0 6px;" onclick="insertMarkdown('&lt;เวลา&gt;', '')" title="เวลาปัจจุบัน">⏰ &lt;เวลา&gt;</button>
+          </div>
+          <textarea id="inputFormTemplate" class="input-field" style="flex: 1; min-height: 180px; font-family: inherit; resize: vertical; line-height: 1.5;" placeholder="วางรูปแบบของคุณที่นี่...&#10;เช่น:&#10;ชื่อคอล : &lt;ชื่อคอล&gt;&#10;วันที่เวลา : &lt;วันที่และเวลา&gt;&#10;ยอด : &lt;ยอดเงิน&gt; บาท"></textarea>
+          <script>
+            function insertMarkdown(prefix, suffix) {
+              const el = document.getElementById('inputFormTemplate');
+              if (!el) return;
+              const start = el.selectionStart;
+              const end = el.selectionEnd;
+              const text = el.value;
+              const selectedText = text.substring(start, end);
+              el.value = text.substring(0, start) + prefix + selectedText + suffix + text.substring(end);
+              el.selectionStart = start + prefix.length;
+              el.selectionEnd = el.selectionStart + selectedText.length;
+              el.focus();
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+          </script>
+        </div>
+
+        <div style="border: 1px solid var(--border-subtle); border-radius: 8px; padding: 16px; background: rgba(0,0,0,0.2);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h3 style="font-size: 14px; margin: 0; color: var(--accent);">⚙️ ช่องกรอกข้อมูล (ดึงอัตโนมัติจาก Template)</h3>
+            <button type="button" id="btnAddFormField" class="btn btn-secondary btn-sm" style="font-size: 12px;">+ เพิ่มเอง</button>
+          </div>
+          <div id="formBuilderFields" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Field rows inserted by JS -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content: space-between;">
+        <button type="button" id="btnDeleteForm" class="btn btn-secondary" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.3);">🗑 ลบแบบฟอร์ม</button>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn btn-secondary" onclick="window.closeModal('modalFormBuilder')">ยกเลิก</button>
+          <button type="button" id="btnSaveForm" class="btn btn-accent">💾 บันทึกแบบฟอร์ม (ออนไลน์)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Quick Paste Items -->
+  <div id="modalQuickPasteItems" class="modal-overlay" style="display:none; z-index:10005;">
+    <div class="modal-card modal-md">
+      <div class="modal-header">
+        <div class="modal-title">
+          <h2>⚡ วางหลายยอดออโต้ (Smart Text Parser)</h2>
+          <p>คัดลอกข้อความหรือรายการตัวเลขมาวาง ระบบจะแยกรายการและคำนวณยอดรวมให้อัตโนมัติ</p>
+        </div>
+        <button type="button" class="modal-close" onclick="window.closeModal('modalQuickPasteItems')">✕</button>
+      </div>
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 12px;">
+        <div class="form-group">
+          <label>วางข้อความที่มีตัวเลขยอดเงิน (รองรับหลายบรรทัด)</label>
+          <textarea id="txtQuickPasteInput" class="input-field" style="height: 180px; font-family: inherit; font-size: 13px; line-height: 1.5;" placeholder="ตัวอย่างเช่น:&#10;1,500&#10;320.22&#10;500&#10;&#10;หรือมีชื่อรายการ:&#10;ค่าธรรมเนียม A 1,500&#10;ค่าปรับ B 320.22"></textarea>
+        </div>
+        <div style="font-size: 12px; color: var(--text-muted); background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); padding: 8px 12px; border-radius: 6px;">
+          💡 ระบบจะดึงตัวเลขในแต่ละบรรทัดมาสร้างเป็นแถวรายการ และรวมยอดเงินให้อัตโนมัติทันที
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content: flex-end; gap: 8px;">
+        <button type="button" class="btn btn-secondary" onclick="window.closeModal('modalQuickPasteItems')">ยกเลิก</button>
+        <button type="button" id="btnConfirmQuickPaste" class="btn btn-accent">✨ นำเข้าและคำนวณยอด</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Infographic Form Guide -->
+  <div id="modalFormGuide" class="modal-overlay" style="display:none; z-index:10008;">
+    <div class="modal-card modal-lg" style="display: flex; flex-direction: column; max-height: 94vh; width: 980px; max-width: 96vw; background: #0f172a; border: 1px solid rgba(255,255,255,0.12); box-shadow: 0 25px 60px rgba(0,0,0,0.7); border-radius: 16px;">
+      
+      <!-- Modal Header -->
+      <div class="modal-header" style="background: linear-gradient(135deg, rgba(245,158,11,0.18) 0%, rgba(59,130,246,0.12) 50%, rgba(139,92,246,0.1) 100%); border-bottom: 1px solid rgba(255,255,255,0.08); padding: 18px 24px;">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <div style="width: 46px; height: 46px; border-radius: 12px; background: rgba(245,158,11,0.2); border: 1px solid rgba(245,158,11,0.4); display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 0 20px rgba(245,158,11,0.3);">
+            📊
+          </div>
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <h2 style="font-size: 19px; margin: 0; font-weight: 700; color: #fff;">คู่มือระบบแบบฟอร์มอัจฉริยะ (Smart+ Infographic)</h2>
+              <span style="background: linear-gradient(135deg, #f59e0b, #d97706); color: #000; font-weight: 700; font-size: 10.5px; padding: 2px 9px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.5px;">PRO EDITION</span>
+            </div>
+            <p style="font-size: 12.5px; color: var(--text-muted); margin: 3px 0 0 0;">เทคนิคการใช้ฟอร์ม 3 คอลัมน์, รายการหลายหมวด, รวมยอดแยกหมวด, คำนวณสูตรออโต้ และ Auto-Save ข้อมูลไม่สูญหาย</p>
+          </div>
+        </div>
+        <button type="button" class="modal-close" onclick="window.closeModal('modalFormGuide')">✕</button>
+      </div>
+
+      <!-- Modal Body (Infographic Master Flow) -->
+      <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 24px;">
+        
+        <!-- 1. Visual 3-Step Workflow Banner -->
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; background: rgba(0,0,0,0.3); padding: 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+          <div style="display: flex; align-items: center; gap: 10px; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.25); border-radius: 10px; padding: 10px 14px;">
+            <div style="font-size: 24px;">1️⃣</div>
+            <div>
+              <div style="font-size: 12.5px; font-weight: 700; color: #38bdf8;">เลือกหรือสร้างฟอร์ม</div>
+              <div style="font-size: 11px; color: var(--text-muted);">ค้นหาฟอร์ม & ซิงค์คลาวด์ทุกเครื่อง</div>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.25); border-radius: 10px; padding: 10px 14px;">
+            <div style="font-size: 24px;">2️⃣</div>
+            <div>
+              <div style="font-size: 12.5px; font-weight: 700; color: #10b981;">กรอกตัวแปร & วางยอด</div>
+              <div style="font-size: 11px; color: var(--text-muted);">วางหลายยอดออโต้ + Auto-Save สด</div>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 10px; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); border-radius: 10px; padding: 10px 14px;">
+            <div style="font-size: 24px;">3️⃣</div>
+            <div>
+              <div style="font-size: 12.5px; font-weight: 700; color: #fbbf24;">คัดลอกไปส่ง (Copy)</div>
+              <div style="font-size: 11px; color: var(--text-muted);">ดูตัวอย่างสด & ตัด ** สำหรับ LINE</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Section: โครงสร้าง 3 คอลัมน์ใหม่ (Layout Anatomy) -->
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 16px;">📐</span>
+            <h3 style="font-size: 15px; margin: 0; font-weight: 700; color: #fff;">โครงสร้างหน้าจอแบบ 3 คอลัมน์ (The 3-Column Workspace)</h3>
+            <span style="font-size: 10px; background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); padding: 2px 7px; border-radius: 10px; font-weight: 600;">NEW UI</span>
+          </div>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1.3fr 1.1fr; gap: 12px; font-size: 12px;">
+            <!-- Col 1 -->
+            <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(56,189,248,0.2); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-weight: 700; color: #38bdf8; font-size: 13px;">1. คอลัมน์ซ้าย : แบบฟอร์ม</span>
+              <ul style="margin: 0; padding-left: 18px; color: var(--text-muted); line-height: 1.6;">
+                <li><b>ค้นหาแบบฟอร์ม:</b> พิมพ์กรองชื่อฟอร์มได้ทันที</li>
+                <li><b>ปุ่ม + สร้าง:</b> สร้างเทมเพลตฟอร์มใหม่แชร์ไปทุกเครื่อง</li>
+                <li><b>ปุ่ม 🔄 รีเฟรช:</b> ซิงค์ดึงแบบฟอร์มล่าสุดจากคลาวด์</li>
+                <li><b>ป้ายสถานะ:</b> ตรวจสอบการเชื่อมต่อออนไลน์</li>
+              </ul>
+            </div>
+            <!-- Col 2 -->
+            <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(16,185,129,0.2); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-weight: 700; color: #10b981; font-size: 13px;">2. คอลัมน์กลาง : ช่องกรอกตัวแปร</span>
+              <ul style="margin: 0; padding-left: 18px; color: var(--text-muted); line-height: 1.6;">
+                <li><b>ตารางรายการหลายหมวด:</b> มีปุ่มเพิ่มแถว & วางยอดออโต้</li>
+                <li><b>ปุ่ม 🗑️ ล้างค่าที่กรอก:</b> เคลียร์ค่าทั้งหมดเพื่อเริ่มรอบใหม่</li>
+                <li><b>ปุ่มลัดเลือกเดือน:</b> มีปุ่ม [เดือนนี้] และ [เดือนก่อน]</li>
+                <li><b>Auto-Save:</b> บันทึกลงเครื่องสดทุกตัวอักษร ข้อมูลไม่หาย</li>
+              </ul>
+            </div>
+            <!-- Col 3 -->
+            <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(245,158,11,0.2); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 6px;">
+              <span style="font-weight: 700; color: #fbbf24; font-size: 13px;">3. คอลัมน์ขวา : Card ตัวอย่างสด</span>
+              <ul style="margin: 0; padding-left: 18px; color: var(--text-muted); line-height: 1.6;">
+                <li><b>Live Preview:</b> เห็นผลลัพธ์ทันทีขณะพิมพ์เต็มหน้าจอ</li>
+                <li><b>ตัด ** สำหรับ LINE:</b> ส่งในแชท LINE ได้อย่างสะอาดตา</li>
+                <li><b>ตัวนับอักษร/บรรทัด:</b> ทราบความยาวข้อความทันที</li>
+                <li><b>ปุ่มคัดลอกใหญ่:</b> 1 คลิกคัดลอกพร้อมแจ้งเตือนสีเขียว</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Section: การแยกหลายหมวดหมู่ & รวมยอด (Multi-Category & Subtotals) -->
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(139,92,246,0.3); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;">📋</span>
+              <h3 style="font-size: 15px; margin: 0; font-weight: 700; color: #fff;">ระบบหลายรายการ &amp; รวมยอดแยกหมวด (Multi-Category Lists)</h3>
+            </div>
+            <span style="font-size: 11px; background: rgba(139,92,246,0.15); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.3); padding: 2px 8px; border-radius: 10px;">เหมาะกับฟอร์มสรุปยอดส่งเงิน</span>
+          </div>
+
+          <p style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin: 0;">
+            กรณีฟอร์มมีหลายส่วน เช่น <b>True Wallet</b>, <b>บัญชีบุคคล</b>, <b>Payment Gateway</b> หรือ <b>เติม Manual</b> สามารถสร้างตารางแยกหมวดอิสระได้ทันที โดยใส่ชื่อหมวดหลังเครื่องหมาย <code>:</code> ในเทมเพลต:
+          </p>
+
+          <!-- Table of Category Tags -->
+          <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px; background: rgba(0,0,0,0.3); border-radius: 8px; overflow: hidden;">
+              <thead>
+                <tr style="background: rgba(139,92,246,0.12); color: #c4b5fd; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.08);">
+                  <th style="padding: 9px 12px;">หมวดหมู่ที่ต้องการ</th>
+                  <th style="padding: 9px 12px;">แท็กตารางรายการใน Template</th>
+                  <th style="padding: 9px 12px;">แท็กรวมเฉพาะหมวด (Subtotal)</th>
+                  <th style="padding: 9px 12px;">ผลลัพธ์ที่ได้</th>
+                </tr>
+              </thead>
+              <tbody style="color: #e2e8f0; line-height: 1.6;">
+                <tr style="border-bottom: 1px dashed rgba(255,255,255,0.05);">
+                  <td style="padding: 8px 12px; font-weight: 600; color: #38bdf8;">หมวดทั่วไป</td>
+                  <td style="padding: 8px 12px;"><code>&lt;รายการ&gt;</code></td>
+                  <td style="padding: 8px 12px;"><code>&lt;รวมยอด&gt;</code> หรือ <code>&lt;รวม&gt;</code></td>
+                  <td style="padding: 8px 12px; color: var(--text-muted);">เปิด 1 ตารางรายการทั่วไป</td>
+                </tr>
+                <tr style="border-bottom: 1px dashed rgba(255,255,255,0.05);">
+                  <td style="padding: 8px 12px; font-weight: 600; color: #ec4899;">หมวด True Wallet</td>
+                  <td style="padding: 8px 12px;"><code>&lt;รายการ:วอเลท&gt;</code></td>
+                  <td style="padding: 8px 12px;"><code>&lt;รวม:วอเลท&gt;</code></td>
+                  <td style="padding: 8px 12px; color: var(--text-muted);">เปิดตารางเฉพาะวอเลท + รวมยอดเฉพาะวอเลท</td>
+                </tr>
+                <tr style="border-bottom: 1px dashed rgba(255,255,255,0.05);">
+                  <td style="padding: 8px 12px; font-weight: 600; color: #10b981;">หมวดบัญชีบุคคล</td>
+                  <td style="padding: 8px 12px;"><code>&lt;รายการ:บุคคล&gt;</code></td>
+                  <td style="padding: 8px 12px;"><code>&lt;รวม:บุคคล&gt;</code></td>
+                  <td style="padding: 8px 12px; color: var(--text-muted);">เปิดตารางบัญชีบุคคล + รวมยอดเฉพาะบุคคล</td>
+                </tr>
+                <tr style="border-bottom: 1px dashed rgba(255,255,255,0.05);">
+                  <td style="padding: 8px 12px; font-weight: 600; color: #f59e0b;">หมวด Gateway / อื่นๆ</td>
+                  <td style="padding: 8px 12px;"><code>&lt;รายการ:เกตเวย์&gt;</code></td>
+                  <td style="padding: 8px 12px;"><code>&lt;รวม:เกตเวย์&gt;</code></td>
+                  <td style="padding: 8px 12px; color: var(--text-muted);">เปิดตารางเกตเวย์ + รวมยอดเฉพาะเกตเวย์</td>
+                </tr>
+                <tr style="background: rgba(16,185,129,0.05);">
+                  <td style="padding: 9px 12px; font-weight: 700; color: #10b981;">⭐ รวมยอดทุกหมวด</td>
+                  <td style="padding: 9px 12px; color: var(--text-muted);">-</td>
+                  <td style="padding: 9px 12px;"><code>&lt;รวมทั้งหมด&gt;</code></td>
+                  <td style="padding: 9px 12px; color: #10b981; font-weight: 600;">รวมยอดเงินของทุกหมวดเข้าด้วยกัน (Grand Total)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Quick Paste Feature Highlight -->
+          <div style="background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.25); border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; gap: 10px; font-size: 12px;">
+            <span style="font-size: 20px;">⚡</span>
+            <div>
+              <b style="color: #60a5fa;">ปุ่มลัด "⚡ วางหลายยอดออโต้":</b> แต่ละหมวดจะมีปุ่มนี้อยู่ สามารถ Copy ยอดเงินหลายบรรทัดจากแชตมาวาง เช่น <code>1,500\n320.22\n500</code> ระบบจะแยกแถวและคำนวณยอดเงินให้ทันทีโดยไม่ต้องพิมพ์ทีละแถว!
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Section: สูตรคำนวณคณิตศาสตร์อัตโนมัติ (Formula Engine) -->
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(236,72,153,0.3); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;">🧮</span>
+              <h3 style="font-size: 15px; margin: 0; font-weight: 700; color: #fff;">สูตรคำนวณคณิตศาสตร์อัตโนมัติ (Formula Engine)</h3>
+            </div>
+            <span style="font-size: 11px; background: rgba(236,72,153,0.15); color: #f472b6; border: 1px solid rgba(236,72,153,0.3); padding: 2px 8px; border-radius: 10px;">ไม่ต้องใช้เครื่องคิดเลข</span>
+          </div>
+
+          <p style="font-size: 12.5px; color: var(--text-muted); line-height: 1.6; margin: 0;">
+            ใส่แท็ก <code>&lt;คำนวณ: สูตรคณิตศาสตร์&gt;</code> ใน Template โดยนำชื่อตัวแปรหรือยอดรวมมาใส่ในสูตรได้เลย รองรับบวก <code>+</code>, ลบ <code>-</code>, คูณ <code>*</code>, หาร <code>/</code>, วงเล็บ <code>( )</code> และเปอร์เซ็นต์ <code>%</code>:
+          </p>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
+            <!-- Formula 1: Fee -->
+            <div style="background: rgba(0,0,0,0.35); padding: 12px; border-radius: 8px; border: 1px dashed rgba(236,72,153,0.3);">
+              <div style="font-weight: 700; color: #f472b6; margin-bottom: 4px;">1. คำนวณค่าธรรมเนียม 2.9%</div>
+              <div style="font-family: monospace; font-size: 11.5px; color: #93c5fd; background: rgba(0,0,0,0.4); padding: 6px 8px; border-radius: 4px; margin-bottom: 4px;">
+                &lt;คำนวณ: [ยอดเงิน] * 2.9 / 100&gt;
+              </div>
+              <div style="color: var(--text-dim); font-size: 11px;">
+                💡 ถ้าช่อง [ยอดเงิน] กรอก <code>3,000</code> ระบบจะคำนวณเป็น <b>87.00</b> ให้ทันที
+              </div>
+            </div>
+
+            <!-- Formula 2: Net -->
+            <div style="background: rgba(0,0,0,0.35); padding: 12px; border-radius: 8px; border: 1px dashed rgba(16,185,129,0.3);">
+              <div style="font-weight: 700; color: #10b981; margin-bottom: 4px;">2. คำนวณยอดสุทธิ (ยอดเงิน - ค่าธรรมเนียม)</div>
+              <div style="font-family: monospace; font-size: 11.5px; color: #6ee7b7; background: rgba(0,0,0,0.4); padding: 6px 8px; border-radius: 4px; margin-bottom: 4px;">
+                &lt;คำนวณ: [ยอดเงิน] - ([ยอดเงิน] * 2.9 / 100)&gt;
+              </div>
+              <div style="color: var(--text-dim); font-size: 11px;">
+                💡 ถ้าช่อง [ยอดเงิน] คือ <code>3,000</code> จะได้ยอดสุทธิ <b>2,913.00</b> อัตโนมัติ
+              </div>
+            </div>
+
+            <!-- Formula 3: Difference -->
+            <div style="background: rgba(0,0,0,0.35); padding: 12px; border-radius: 8px; border: 1px dashed rgba(59,130,246,0.3);">
+              <div style="font-weight: 700; color: #60a5fa; margin-bottom: 4px;">3. คำนวณผลต่างระหว่างหมวด</div>
+              <div style="font-family: monospace; font-size: 11.5px; color: #bfdbfe; background: rgba(0,0,0,0.4); padding: 6px 8px; border-radius: 4px; margin-bottom: 4px;">
+                &lt;คำนวณ: [รวม:วอเลท] - [รวม:บุคคล]&gt;
+              </div>
+              <div style="color: var(--text-dim); font-size: 11px;">
+                💡 นำผลรวมของหมวดวอเลท มาลบกับผลรวมของหมวดบุคคลได้ทันที
+              </div>
+            </div>
+
+            <!-- Formula 4: Percentage -->
+            <div style="background: rgba(0,0,0,0.35); padding: 12px; border-radius: 8px; border: 1px dashed rgba(245,158,11,0.3);">
+              <div style="font-weight: 700; color: #fbbf24; margin-bottom: 4px;">4. ใส่เครื่องหมาย % ได้โดยตรง</div>
+              <div style="font-family: monospace; font-size: 11.5px; color: #fde68a; background: rgba(0,0,0,0.4); padding: 6px 8px; border-radius: 4px; margin-bottom: 4px;">
+                &lt;คำนวณ: [ยอดเงิน] * 2.9%&gt;
+              </div>
+              <div style="color: var(--text-dim); font-size: 11px;">
+                💡 พิมพ์ <code>2.9%</code> ได้ทันที ระบบจะแปลงเป็นหาร 100 ให้อัตโนมัติ
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Section: ตัวแปรระบบที่ไม่ต้องพิมพ์เอง (System Smart Variables) -->
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(245,158,11,0.3); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 18px;">🤖</span>
+            <h3 style="font-size: 15px; margin: 0; font-weight: 700; color: #fff;">ตัวแปรระบบ ดึงค่าจากโปรแกรมให้อัตโนมัติ (System Variables)</h3>
+          </div>
+          <p style="font-size: 12.5px; color: var(--text-muted); line-height: 1.5; margin: 0;">
+            แท็กเหล่านี้ไม่ต้องมีช่องให้พิมพ์ ระบบจะดึงค่าอัตโนมัติจากโปรแกรมและเวลาเครื่องให้ทันที:
+          </p>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-size: 12px;">
+            <div style="background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+              <b style="color: #38bdf8;">🌐 &lt;ชื่อเว็บ&gt; / &lt;เว็บ&gt;</b>
+              <div style="color: var(--text-dim); font-size: 11px;">ดึงชื่อเว็บที่เข้าสู่ระบบ เช่น JGAMING88</div>
+            </div>
+            <div style="background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+              <b style="color: #10b981;">👤 &lt;ชื่อแอดมิน&gt; / &lt;แอดมิน&gt;</b>
+              <div style="color: var(--text-dim); font-size: 11px;">ดึงชื่อแอดมินที่กำลังทำงานอยู่</div>
+            </div>
+            <div style="background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+              <b style="color: #f59e0b;">🗓️ &lt;ปี พ.ศ.&gt; / &lt;ปี ค.ศ.&gt;</b>
+              <div style="color: var(--text-dim); font-size: 11px;">ปีปัจจุบัน เช่น 2569 / 2026</div>
+            </div>
+            <div style="background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+              <b style="color: #a78bfa;">📅 &lt;เดือน&gt; / &lt;เดือนปัจจุบัน&gt;</b>
+              <div style="color: var(--text-dim); font-size: 11px;">ชื่อเดือนภาษาไทย เช่น ตุลาคม (มีปุ่มลัดเลือกเดือน)</div>
+            </div>
+            <div style="background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+              <b style="color: #ec4899;">⏰ &lt;วันที่&gt; / &lt;วันนี้&gt;</b>
+              <div style="color: var(--text-dim); font-size: 11px;">วันที่ปัจจุบัน (เช่น 04/10/2026)</div>
+            </div>
+            <div style="background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.06);">
+              <b style="color: #fb7185;">⏱️ &lt;เวลา&gt; / &lt;เวลาปัจจุบัน&gt;</b>
+              <div style="color: var(--text-dim); font-size: 11px;">เวลาปัจจุบัน (เช่น 15:30)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. Section: มั่นใจข้อมูลไม่หาย 100% (Zero Data Loss Protection) -->
+        <div style="background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.3); border-radius: 12px; padding: 16px 20px; display: flex; align-items: flex-start; gap: 14px;">
+          <div style="font-size: 26px; line-height: 1;">🛡️</div>
+          <div style="flex: 1; font-size: 12.5px; line-height: 1.6; color: var(--text);">
+            <b style="color: #10b981; font-size: 14px;">ระบบ Auto-Save ป้องกันข้อมูลหาย 100% (Zero Data Loss):</b><br>
+            • ทุกตัวอักษรและทุกรายการที่พิมพ์จะถูกบันทึกลงหน่วยความจำของเครื่องทันที (Realtime Local Autosave)<br>
+            • สลับหน้าต่างไปก๊อปปี้ข้อความจาก LINE, สลับดูเมนูอื่น หรือแม้แต่ปิดโปรแกรมแล้วเปิดใหม่ ข้อมูลที่พิมพ์ค้างไว้จะยังอยู่ครบถ้วน<br>
+            • เมื่อส่งงานเสร็จและต้องการเริ่มกรอกรอบใหม่ เพียงกดปุ่ม <b>`🗑️ ล้างค่าที่กรอก`</b> ที่อยู่ด้านบนของคอลัมน์ 2 ได้ทันที
+          </div>
+        </div>
+
+        <!-- 7. Section: ตัวอย่าง Template จริงพร้อมนำไปใช้ (Real-World Master Template) -->
+        <div style="background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 16px;">💡</span>
+              <span style="font-size: 13.5px; font-weight: 700; color: #fbbf24;">ตัวอย่างโค้ด Template: "สรุปยอดส่งเงิน 00.00" (ใช้งานได้จริง)</span>
+            </div>
+            <span style="font-size: 11px; color: var(--text-dim);">ก๊อปปี้ไปวางในหน้าสร้างฟอร์มได้เลย</span>
+          </div>
+
+          <pre style="background: #090d16; border: 1px solid rgba(255,255,255,0.08); padding: 14px; border-radius: 8px; font-family: 'Consolas', monospace; font-size: 12px; color: #a5f3fc; line-height: 1.6; overflow-x: auto; margin: 0;">
+&lt;ชื่อเว็บ&gt;
+วันที่ : &lt;วันที่&gt;
+
+📍 True Wallet 📍
+&lt;รายการ:วอเลท&gt;
+ยอดฝากหน้าแดชบอร์ด : &lt;ยอดฝากวอเลท&gt; บาท
+ค่าธรรมเนียมวอเลท (2.9%) : &lt;คำนวณ: [ยอดฝากวอเลท] * 2.9 / 100&gt; บาท
+สรุปโยกเงิน : &lt;คำนวณ: [ยอดฝากวอเลท] - ([ยอดฝากวอเลท] * 2.9 / 100)&gt; บาท
+
+📍 บัญชีบุคคล 📍
+&lt;รายการ:บุคคล&gt;
+ยอดส่งการเงิน : &lt;รวม:บุคคล&gt; บาท
+
+📍 สรุปรวม 📍
+ยอดรวมทั้งหมด : &lt;รวมทั้งหมด&gt; บาท
+          </pre>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="modal-footer" style="background: rgba(0,0,0,0.25); border-top: 1px solid rgba(255,255,255,0.08); padding: 14px 24px; display: flex; justify-content: space-between; align-items: center;">
+        <span style="font-size: 12px; color: var(--text-dim);">✨ สร้างฟอร์มเพียงครั้งเดียว แชร์ใช้ร่วมกันได้ทุกเครื่องผ่านระบบคลาวด์</span>
+        <button type="button" class="btn btn-accent" style="padding: 9px 26px; font-size: 13px; font-weight: 700; border-radius: 8px;" onclick="window.closeModal('modalFormGuide')">
+          ✓ เข้าใจแล้ว เริ่มใช้งานทันที
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Modal: Set SwiftPay Balance Manually -->
+  <div id="modalSetSwiftPayBalance" class="modal-overlay" style="display:none;">
+    <div class="modal-card modal-md">
+      <div class="modal-header">
+        <div class="modal-title">
+          <h2>💳 แก้ไข/อัปเดตยอดเงิน SwiftPay</h2>
+          <p>ระบุยอดเงินกระเป๋า SwiftPay Merchant เพื่อนำไปแสดงบนหน้าภาพรวม</p>
+        </div>
+        <button type="button" class="modal-close" onclick="window.closeModal('modalSetSwiftPayBalance')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>ยอดเงินที่ใช้ได้ (Available Balance) *</label>
+          <input type="number" step="0.01" id="inputSpAvail" class="input-field" placeholder="35801.54" value="35801.54">
+        </div>
+        <div class="form-group">
+          <label>ยอดเงินรวม (Total Balance)</label>
+          <input type="number" step="0.01" id="inputSpTotal" class="input-field" placeholder="35801.54" value="35801.54">
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label>ยอดเงินที่ยังไม่ถึงบัญชี</label>
+            <input type="number" step="0.01" id="inputSpPending" class="input-field" value="0.00">
+          </div>
+          <div class="form-group">
+            <label>ยอดเงินที่ถูกระงับ</label>
+            <input type="number" step="0.01" id="inputSpHeld" class="input-field" value="0.00">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>ชื่อบัญชีร้านค้า</label>
+          <input type="text" id="inputSpMerchant" class="input-field" value="SP09 - jga88">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="window.closeModal('modalSetSwiftPayBalance')">ยกเลิก</button>
+        <button type="button" id="btnSaveSpBalanceManual" class="btn btn-accent">💾 บันทึกยอดเงิน</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Capture Preview & Annotation Editor (Draw Red Rectangles) -->
+  <div id="modalCaptureAnnotation" class="modal-overlay" style="display:none; z-index:99999;">
+    <div class="modal-card modal-xl" style="max-width:1160px; width:95vw; max-height:94vh; display:flex; flex-direction:column; padding:0; overflow:hidden;">
+      <div class="modal-header" style="padding:12px 18px; border-bottom:1px solid var(--border-subtle); flex-shrink:0;">
+        <div class="modal-title">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:18px;">📸</span>
+            <h2 style="font-size:16px; margin:0;">ภาพที่แคป (Dashboard Preview & Annotation)</h2>
+            <span class="badge" style="background:rgba(239,68,68,0.18); border:1px solid rgba(239,68,68,0.4); color:#f87171; font-size:11px;">🟥 โหมดวงกรอบแดง</span>
+          </div>
+          <p style="font-size:11px; color:var(--text-muted); margin:3px 0 0 0;">คลิกแล้วลากเมาส์บนรูปภาพเพื่อวาดกรอบสี่เหลี่ยมสีแดง (วงแดง) เน้นจุดที่ต้องการ สามารถวาดได้หลายจุด</p>
+        </div>
+        <button type="button" class="modal-close" id="btnAnnoClose" title="ปิด (Esc)">✕</button>
+      </div>
+
+      <!-- Annotation Action Bar -->
+      <div class="annotation-toolbar" style="padding:8px 18px; background:rgba(255,255,255,0.02); border-bottom:1px solid var(--border-subtle); display:flex; align-items:center; gap:8px; flex-wrap:wrap; flex-shrink:0;">
+        <button type="button" id="btnAnnoUndo" class="btn btn-secondary btn-sm" style="font-size:11.5px; height:28px; padding:0 10px;" title="ย้อนกลับการวาดล่าสุด (Ctrl + Z)">
+          <span>↶</span> <span>ย้อนกลับ (Undo)</span>
+        </button>
+        <button type="button" id="btnAnnoClear" class="btn btn-secondary btn-sm" style="font-size:11.5px; height:28px; padding:0 10px;" title="ล้างกรอบสีแดงทั้งหมด">
+          <span>🗑️</span> <span>ล้างทั้งหมด (Clear)</span>
+        </button>
+        <div style="height:18px; width:1px; background:var(--border-subtle); margin:0 4px;"></div>
+        <span style="font-size:11.5px; color:var(--text-muted);">ขนาดเส้น:</span>
+        <button type="button" id="btnAnnoStroke3" class="btn btn-secondary btn-sm active" style="height:26px; padding:0 8px; font-size:11px;">3px (ปกติ)</button>
+        <button type="button" id="btnAnnoStroke5" class="btn btn-secondary btn-sm" style="height:26px; padding:0 8px; font-size:11px;">5px (หนา)</button>
+        <span id="txtAnnoRectCount" style="font-size:11.5px; color:var(--text-muted); margin-left:auto;">จำนวนกรอบที่วาด: 0</span>
+      </div>
+
+      <div class="modal-body" style="padding:14px 18px; overflow:auto; flex:1; display:flex; justify-content:center; align-items:flex-start; background:#070d18;">
+        <div class="annotation-canvas-wrap" style="position:relative; max-width:100%; display:inline-block; border-radius:6px; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.1);">
+          <canvas id="annotationCanvas" style="display:block; max-width:100%; height:auto; cursor:crosshair;"></canvas>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="padding:12px 18px; border-top:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; background:#0b1320; flex-shrink:0;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <small style="color:var(--text-muted); font-size:11px;">💡 หากมีการวาดกรอบแดง เมื่อกดคัดลอกหรือบันทึก จะติดกรอบสีแดงไปด้วยทันที</small>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <button type="button" id="btnAnnoCancel" class="btn btn-secondary" style="height:34px; padding:0 14px; font-size:12px;">✕ ยกเลิก</button>
+          <button type="button" id="btnAnnoSave" class="btn btn-secondary" style="height:34px; padding:0 14px; font-size:12px; display:inline-flex; align-items:center; gap:5px;">
+            <span>💾</span> <span>บันทึกรูป</span>
+          </button>
+          <button type="button" id="btnAnnoCopy" class="btn btn-accent" style="height:34px; padding:0 18px; font-size:12.5px; font-weight:700; display:inline-flex; align-items:center; gap:6px;">
+            <span>📋</span> <span>คัดลอกรูปภาพ (Ctrl+V ใน LINE)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Remote Control Lockout Overlay (Fullscreen Blocking) -->
+  <div id="remoteLockoutOverlay" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(11, 17, 32, 0.97); backdrop-filter:blur(16px); z-index:9999999; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:30px;">
+    <div style="max-width:500px; width:100%; background:#1e293b; border:1px solid #ef4444; border-radius:18px; padding:36px 28px; box-shadow:0 20px 40px rgba(0,0,0,0.8);">
+      <div style="font-size:56px; margin-bottom:16px;">🛑</div>
+      <h2 id="lockoutTitle" style="font-size:22px; color:#f87171; font-weight:700; margin-bottom:12px;">ระบบปิดปรับปรุงชั่วคราว</h2>
+      <p id="lockoutMessage" style="font-size:14px; color:#cbd5e1; line-height:1.6; margin-bottom:20px;">ขณะนี้ระบบ NK Helper อยู่ระหว่างการปรับปรุงระบบเพื่อความเสถียร กรุณารอสักครู่หรือติดต่อแอดมิน</p>
+      <div id="lockoutContact" style="font-size:13px; color:#94a3b8; background:rgba(255,255,255,0.05); padding:10px 16px; border-radius:8px; border:1px solid #334155;">ติดต่อ: ผู้ดูแลระบบ</div>
+    </div>
+  </div>
+
+  <!-- Modal: Force Update Required -->
+  <div id="remoteForceUpdateModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(11, 17, 32, 0.95); backdrop-filter:blur(14px); z-index:999999; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:30px;">
+    <div style="max-width:500px; width:100%; background:#1e293b; border:1px solid #3b82f6; border-radius:18px; padding:36px 28px; box-shadow:0 20px 40px rgba(0,0,0,0.8);">
+      <div style="font-size:56px; margin-bottom:16px;">🚀</div>
+      <h2 style="font-size:22px; color:#60a5fa; font-weight:700; margin-bottom:8px;">มีเวอร์ชันใหม่อัปเดต!</h2>
+      <div style="font-size:14px; color:#94a3b8; margin-bottom:16px;">
+        เวอร์ชันปัจจุบัน: <span id="updateCurrentVer">v3.5.2</span> ➔ เวอร์ชันล่าสุด: <strong id="updateLatestVer" style="color:#10b981;">v3.5.3</strong>
+      </div>
+      <div id="updateReleaseNotes" style="font-size:13px; color:#cbd5e1; background:rgba(0,0,0,0.3); padding:14px; border-radius:10px; text-align:left; max-height:140px; overflow-y:auto; margin-bottom:24px; border:1px solid #334155; line-height:1.5;"></div>
+      <button type="button" id="btnDownloadUpdate" class="btn btn-accent" style="width:100%; height:46px; font-size:15px; font-weight:700; border-radius:10px; display:inline-flex; align-items:center; justify-content:center; gap:8px;">
+        <span>📥</span> <span>ดาวน์โหลดตัวติดตั้งใหม่ (.exe)</span>
+      </button>
+      <div id="updateProgressContainer" style="display:none; margin-top:16px;">
+        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px; color:var(--text-main);">
+          <span id="updateProgressText">กำลังดาวน์โหลด...</span>
+          <span id="updateProgressPercent">0%</span>
+        </div>
+        <div style="height:8px; border-radius:4px; background:rgba(255,255,255,0.1); overflow:hidden;">
+          <div id="updateProgressFill" style="width:0%; height:100%; background:linear-gradient(90deg, #38bdf8, #818cf8); border-radius:4px; transition:width 0.2s;"></div>
+        </div>
+      </div>
+      <small id="updateNoticeText" style="display:block; margin-top:12px; font-size:11.5px; color:#f87171;">⚠️ มีการบังคับให้อัปเดตเวอร์ชันนี้ก่อนใช้งาน</small>
+    </div>
+  </div>
+
+  <!-- Remote Broadcast Alert Banner -->
+  <div id="remoteBroadcastBanner" style="display:none; position:fixed; top:36px; left:0; right:0; z-index:9999; padding:9px 18px; align-items:center; justify-content:space-between; font-size:13px; font-weight:600; box-shadow:0 4px 14px rgba(0,0,0,0.4); background:#3b82f6; color:#ffffff;">
+    <div style="display:flex; align-items:center; gap:10px; margin:0 auto;">
+      <span id="broadcastIcon">📢</span>
+      <span id="broadcastText"></span>
+    </div>
+    <button type="button" id="btnCloseBroadcast" style="background:transparent; border:none; color:inherit; font-size:16px; cursor:pointer; padding:0 8px; opacity:0.8;">✕</button>
+  </div>
+
+  <!-- Modal: Modern System Dialog (Replacement for window.confirm & window.alert) -->
+  <div id="modalModernDialog" class="modern-dialog-overlay" style="display:none;">
+    <div class="modern-dialog-card" id="modernDialogCard">
+      <div id="modernDialogGlow" class="modern-dialog-glow"></div>
+      <div id="modernDialogIconWrap" class="modern-dialog-icon-wrap">
+        <span id="modernDialogIcon" class="modern-dialog-icon">⚠️</span>
+      </div>
+      <h3 id="modernDialogTitle" class="modern-dialog-title">ยืนยันการดำเนินการ</h3>
+      <div id="modernDialogMessage" class="modern-dialog-message"></div>
+      <div class="modern-dialog-actions">
+        <button type="button" id="btnModernDialogCancel" class="modern-dialog-btn modern-dialog-btn-cancel">ยกเลิก</button>
+        <button type="button" id="btnModernDialogConfirm" class="modern-dialog-btn modern-dialog-btn-confirm">ยืนยัน</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
