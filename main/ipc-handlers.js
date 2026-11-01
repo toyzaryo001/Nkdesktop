@@ -36,7 +36,7 @@ function register({ ipcMain, mainWindow, store, auth, apiEngine, withdrawEngine,
   ipcMain.handle('withdraw-start', (_e, config) => withdrawEngine.start(config));
   ipcMain.handle('withdraw-stop', () => withdrawEngine.stop());
   ipcMain.handle('withdraw-update-config', (_e, config) => withdrawEngine.updateConfig(config));
-  ipcMain.handle('withdraw-set-auto-approve', (_e, enabled, options) => withdrawEngine.setAutoApprove(enabled, options));
+  ipcMain.handle('withdraw-set-auto-approve', (_e, ...args) => withdrawEngine.setAutoApprove(...args));
   ipcMain.handle('withdraw-tick-now', () => withdrawEngine.pollWithdrawApi());
   ipcMain.handle('withdraw-manual-approve', (_e, itemOrId, provider) => withdrawEngine.manualApproveWithdraw(itemOrId, provider));
   ipcMain.handle('withdraw-manual-reject', (_e, { txId, note }) => withdrawEngine.manualRejectWithdraw(txId, note));

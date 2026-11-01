@@ -35,7 +35,7 @@ contextBridge.exposeInMainWorld('nkAPI', {
   startWithdraw: (config) => ipcRenderer.invoke('withdraw-start', config),
   stopWithdraw: () => ipcRenderer.invoke('withdraw-stop'),
   updateWithdrawConfig: (config) => ipcRenderer.invoke('withdraw-update-config', config),
-  setWithdrawAutoApprove: (enabled, options) => ipcRenderer.invoke('withdraw-set-auto-approve', enabled, options),
+  setWithdrawAutoApprove: (...args) => ipcRenderer.invoke('withdraw-set-auto-approve', ...args),
   pollWithdrawNow: () => ipcRenderer.invoke('withdraw-tick-now'),
   approveWithdraw: (itemOrId, provider) => ipcRenderer.invoke('withdraw-manual-approve', itemOrId, provider),
   rejectWithdraw: (txId, note) => ipcRenderer.invoke('withdraw-manual-reject', { txId, note }),

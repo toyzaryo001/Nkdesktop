@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NK BackOffice Helper v3.8.33</title>
+  <title>NK BackOffice Helper v3.8.36</title>
   <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
     <div class="titlebar-brand">
       <span class="brand-badge">NK</span>
       <span class="titlebar-title">BackOffice Helper Desktop</span>
-      <span class="version-tag" id="appVersionTag">v3.8.33</span>
+      <span class="version-tag" id="appVersionTag">v3.8.36</span>
     </div>
     <div class="titlebar-actions">
       <div id="remoteControlPill" class="session-status" style="display:inline-flex; align-items:center; gap:6px; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); color:#10b981; padding:3px 10px; border-radius:20px; font-size:11.5px; font-weight:600;" title="สถานะเชื่อมต่อศูนย์ควบคุมออนไลน์ Railway">
@@ -196,9 +196,17 @@
                   <span>🔄</span>
                   <span>ดึงข้อมูลล่าสุด</span>
                 </button>
+                <button id="btnDailyCapture" class="btn btn-secondary btn-sm" style="background:rgba(250,204,21,0.12); border-color:#eab308; color:#fef08a;" title="แคปภาพตารางสรุปรายวันอย่างสมบูรณ์แบบ (ครบถ้วนทุกคอลัมน์และทุกแถว ไม่ขาดไม่เกิน)">
+                  <span>📸</span>
+                  <span id="txtDailyCapture">แคปตาราง</span>
+                </button>
                 <button id="btnDailyExport" class="btn btn-secondary btn-sm" title="ดาวน์โหลดไฟล์ Excel (.xlsx)">
                   <span>📥</span>
                   <span>ส่งออก Excel</span>
+                </button>
+                <button id="btnDailyExpand" class="btn btn-secondary btn-sm" title="ขยายมุมมองตารางให้เต็มหน้าจอ / ย่อขนาด">
+                  <span id="iconDailyExpand">⛶</span>
+                  <span id="txtDailyExpand">ขยายเต็มจอ</span>
                 </button>
               </div>
             </div>
@@ -240,6 +248,60 @@
                   <!-- Generated dynamically in JS -->
                 </tfoot>
               </table>
+            </div>
+
+            <!-- Daily Report Text Summary Generator (ชุดข้อความสรุปรายวัน) -->
+            <div class="form-card" style="margin-top:20px; background:linear-gradient(145deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9)); border:1px solid rgba(255, 255, 255, 0.1); border-radius:12px; padding:20px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid rgba(255,255,255,0.08);">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <span style="font-size:22px;">📝</span>
+                  <div>
+                    <h3 style="margin:0; font-size:15px; font-weight:700; color:var(--text-main);">ชุดข้อความสรุปรายวัน (สำหรับส่งรายงาน)</h3>
+                    <span style="font-size:11.5px; color:var(--text-muted);">ดึงข้อมูลจริงจากตารางด้านบนอัตโนมัติ · ข้อมูลเริ่มต้นเป็นของเมื่อวาน · สามารถเลือกวันที่ดูย้อนหลังได้</span>
+                  </div>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <label for="selDailySummaryDate" style="font-size:12px; color:var(--text-muted); font-weight:600;">เลือกวันที่:</label>
+                    <select id="selDailySummaryDate" class="select-field" style="width:170px; padding:6px 10px; font-size:12.5px;"></select>
+                  </div>
+                  <button type="button" id="btnCopyDailySummary" class="btn btn-primary" style="display:inline-flex; align-items:center; gap:6px; padding:7px 16px;">
+                    <span>📋</span>
+                    <span id="txtCopyDailySummaryLabel">คัดลอกชุดข้อความ</span>
+                  </button>
+                </div>
+              </div>
+
+              <div style="display:grid; grid-template-columns: minmax(280px, 1fr) 2fr; gap:16px;">
+                <!-- Left controls / Manual inputs -->
+                <div style="background:rgba(15, 23, 42, 0.5); border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:10px;">
+                  <div style="font-size:12px; font-weight:700; color:var(--accent); margin-bottom:4px;">⚙️ ข้อมูลลูกค้าทักเพจ/ไลน์ (กรอกเพิ่ม)</div>
+                  <div class="form-group">
+                    <label style="font-size:11px; color:var(--text-muted);">Line: ทักเข้ามา (คน)</label>
+                    <input type="number" id="inputDailySummaryLineInquiry" class="input-field" value="0" min="0" step="1" style="font-size:12px; padding:6px 8px;">
+                  </div>
+                  <div class="form-group">
+                    <label style="font-size:11px; color:var(--text-muted);">Line: สมัคร (คน)</label>
+                    <input type="number" id="inputDailySummaryLineRegister" class="input-field" value="0" min="0" step="1" style="font-size:12px; padding:6px 8px;">
+                  </div>
+                  <div class="form-group">
+                    <label style="font-size:11px; color:var(--text-muted);">โบนัส + แลกแต้ม: จำนวนคน (คน)</label>
+                    <input type="number" id="inputDailySummaryBonusCount" class="input-field" value="0" min="0" step="1" readonly style="font-size:12px; padding:6px 8px;" aria-label="จำนวนคนที่ได้รับโบนัสหรือแลกแต้ม ดึงอัตโนมัติ">
+                  </div>
+                  <div style="font-size:11px; color:var(--text-muted); line-height:1.5; margin-top:auto; background:rgba(255,255,255,0.02); padding:10px; border-radius:6px; border:1px dashed rgba(255,255,255,0.1);">
+                    💡 <strong>ข้อมูลที่ดึงจริงจากตาราง:</strong><br>
+                    • สมัคร, สมัครฝาก, เปอร์เซ็นต์<br>
+                    • จำนวนคนและยอดเครดิตรวมจากเติมโบนัส + แลกแต้ม<br>
+                    • ยอด Active ลูกค้าที่ใช้งาน<br>
+                    ระบบจะคำนวณและจัดรูปแบบตามตัวอย่างให้อัตโนมัติ
+                  </div>
+                </div>
+
+                <!-- Right preview box -->
+                <div style="display:flex; flex-direction:column;">
+                  <textarea id="txtDailySummaryResult" class="input-field" readonly style="flex:1; min-height:280px; font-family:'Cascadia Code', Consolas, Monaco, monospace, 'Noto Sans Thai'; font-size:13px; line-height:1.6; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:14px; resize:vertical; cursor:text; white-space:pre; color:#e2e8f0;" placeholder="กำลังสร้างชุดข้อความ..."></textarea>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -359,39 +421,95 @@
             </div>
           </div>
 
-          <div class="form-card">
-            <div class="form-row" style="align-items:flex-end;">
-              <div class="form-group" style="max-width: 170px;">
-                <label>ยอดเริ่มส่ง (บาท)</label>
-                <input type="number" id="withdrawMinAmount" class="input-field" value="0" min="0" placeholder="เช่น 1000" title="ยอดขั้นต่ำที่จะส่งอนุมัติ (ต่ำกว่านี้ไม่ส่ง)">
-              </div>
-              <div class="form-group" style="max-width: 170px;">
-                <label>ยอดเกินนี้ไม่ส่ง (บาท)</label>
-                <input type="number" id="withdrawMaxAmount" class="input-field" value="5000" min="1" placeholder="เช่น 5000" title="ยอดสูงสุดที่จะส่งอนุมัติ (เกินกว่านี้ไม่ส่ง)">
-              </div>
-              <div class="form-group" style="max-width: 190px;">
-                <label>ส่งต่อเกตเวย์</label>
-                <select id="withdrawAutoProvider" class="select-field" title="เลือกเกตเวย์ผู้ให้บริการที่จะส่งคำสั่งอนุมัติไป">
-                  <option value="crs">🏢 CRS (ส่งเข้าคิว)</option>
-                  <option value="swiftpay">⚡ SwiftPay (อัตโนมัติ)</option>
-                </select>
-              </div>
-              <div class="form-group" style="max-width: 180px; padding-bottom: 8px;">
-                <label class="switch-label">
-                  <span style="font-weight:700; color:var(--accent);">Auto Approve</span>
-                  <input type="checkbox" id="withdrawAutoApproveToggle" class="switch-input">
+          <!-- Auto Approve Dual Senders Grid (Bank vs TrueMoney) -->
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap:16px; margin-bottom:16px;">
+            <!-- Box 1: ธนาคารปกติ (Bank) -->
+            <div class="form-card" style="border-left: 4px solid #3b82f6; margin-bottom:0; background:linear-gradient(145deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.08);">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="font-size:20px;">🏦</span>
+                  <div>
+                    <strong style="color:#60a5fa; font-size:14px; display:block;">ส่ง Auto: ธนาคารปกติ (Bank)</strong>
+                    <span style="font-size:11px; color:var(--text-muted);">KBANK, SCB, KTB, BBL, TTB ฯลฯ</span>
+                  </div>
+                </div>
+                <label class="switch-label" style="margin:0;">
+                  <span style="font-weight:700; font-size:12px; color:#60a5fa; margin-right:6px;">เปิดส่ง</span>
+                  <input type="checkbox" id="withdrawBankAutoToggle" class="switch-input">
                   <span class="switch-slider"></span>
                 </label>
               </div>
-              <div style="margin-bottom:10px; display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#10b981; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.25); padding:6px 12px; border-radius:8px; font-weight:600;">
-                <span style="width:7px; height:7px; border-radius:50%; background:#10b981; box-shadow:0 0 6px #10b981;"></span>
-                <span>ตรวจจับเรียลไทม์ (Live 5s)</span>
+              <div class="form-row" style="align-items:flex-end; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                  <label style="font-size:11.5px; color:var(--text-muted);">ยอดเริ่มส่ง (บาท)</label>
+                  <input type="number" id="withdrawBankMinAmount" class="input-field" value="0" min="0" placeholder="0" title="ยอดขั้นต่ำที่จะส่งอนุมัติ">
+                </div>
+                <div class="form-group" style="flex:1;">
+                  <label style="font-size:11.5px; color:var(--text-muted);">ยอดไม่เกิน (บาท)</label>
+                  <input type="number" id="withdrawBankMaxAmount" class="input-field" value="5000" min="1" placeholder="5000" title="ยอดสูงสุดที่จะส่งอนุมัติ">
+                </div>
+                <div class="form-group" style="flex:1.2;">
+                  <label style="font-size:11.5px; color:var(--text-muted);">ส่งต่อเกตเวย์</label>
+                  <select id="withdrawBankProvider" class="select-field">
+                    <option value="crs">🏢 CRS (ส่งเข้าคิว)</option>
+                    <option value="swiftpay">⚡ SwiftPay (อัตโนมัติ)</option>
+                  </select>
+                </div>
               </div>
             </div>
-            <div id="withdrawStatusText" style="margin-top:12px; font-size:12px; color:var(--text-muted);">
-              สถานะ: หยุดอยู่
+
+            <!-- Box 2: TRUEMONEY Wallet -->
+            <div class="form-card" style="border-left: 4px solid #f97316; margin-bottom:0; background:linear-gradient(145deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.9));">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.08);">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span style="font-size:20px;">🟠</span>
+                  <div>
+                    <strong style="color:#fb923c; font-size:14px; display:block;">ส่ง Auto: TRUEMONEY (Wallet)</strong>
+                    <span style="font-size:11px; color:var(--text-muted);">ทรูมันนี่ วอลเล็ท ทุกรายการ</span>
+                  </div>
+                </div>
+                <label class="switch-label" style="margin:0;">
+                  <span style="font-weight:700; font-size:12px; color:#fb923c; margin-right:6px;">เปิดส่ง</span>
+                  <input type="checkbox" id="withdrawWalletAutoToggle" class="switch-input">
+                  <span class="switch-slider"></span>
+                </label>
+              </div>
+              <div class="form-row" style="align-items:flex-end; gap:10px;">
+                <div class="form-group" style="flex:1;">
+                  <label style="font-size:11.5px; color:var(--text-muted);">ยอดเริ่มส่ง (บาท)</label>
+                  <input type="number" id="withdrawWalletMinAmount" class="input-field" value="0" min="0" placeholder="0" title="ยอดขั้นต่ำที่จะส่งอนุมัติ">
+                </div>
+                <div class="form-group" style="flex:1;">
+                  <label style="font-size:11.5px; color:var(--text-muted);">ยอดไม่เกิน (บาท)</label>
+                  <input type="number" id="withdrawWalletMaxAmount" class="input-field" value="5000" min="1" placeholder="5000" title="ยอดสูงสุดที่จะส่งอนุมัติ">
+                </div>
+                <div class="form-group" style="flex:1.2;">
+                  <label style="font-size:11.5px; color:var(--text-muted);">ส่งต่อเกตเวย์</label>
+                  <select id="withdrawWalletProvider" class="select-field">
+                    <option value="crs">🏢 CRS (ส่งเข้าคิว)</option>
+                    <option value="swiftpay">⚡ SwiftPay (อัตโนมัติ)</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </div>
+
+          <!-- Unified Status Bar -->
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 18px; background:rgba(15,23,42,0.65); border:1px solid rgba(255,255,255,0.08); border-radius:12px; margin-bottom:20px; box-shadow:0 4px 12px rgba(0,0,0,0.2);">
+            <div id="withdrawStatusText" style="font-size:12.5px; color:var(--text-muted); display:flex; align-items:center; gap:8px;">
+              <span>สถานะ: หยุดอยู่</span>
+            </div>
+            <div style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#10b981; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.25); padding:4px 12px; border-radius:8px; font-weight:600;">
+              <span style="width:7px; height:7px; border-radius:50%; background:#10b981; box-shadow:0 0 6px #10b981;"></span>
+              <span>ตรวจจับเรียลไทม์ (Live 5s)</span>
+            </div>
+          </div>
+
+          <!-- Hidden legacy mirror inputs for fallback compatibility -->
+          <input type="hidden" id="withdrawMinAmount">
+          <input type="hidden" id="withdrawMaxAmount">
+          <input type="hidden" id="withdrawAutoProvider">
+          <input type="hidden" id="withdrawAutoApproveToggle">
 
           <h3 style="margin-top:24px; font-size:14px; color:var(--text-muted);">📋 รายการรอดำเนินการ (รออนุมัติ)</h3>
           <div class="table-container">
@@ -1528,7 +1646,7 @@
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
               <div>
                 <h3 style="font-size:15px; margin-bottom:4px;">🚀 เวอร์ชันโปรแกรม (NK Helper Desktop)</h3>
-                <span style="font-size:12.5px; color:var(--accent); font-weight:700;">เวอร์ชันปัจจุบัน: v3.8.33</span>
+                <span style="font-size:12.5px; color:var(--accent); font-weight:700;">เวอร์ชันปัจจุบัน: v3.8.36</span>
                 <p style="font-size:11px; color:var(--text-muted); margin-top:2px;">รองรับเมนูเว็บ Agent (ag.ismgaming6.com), แก้ไขช่องกรอก วันที่/เวลา แบบฟอร์ม, บันทึกฟอร์มปลอดภัย Offline First</p>
               </div>
               <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -2646,6 +2764,7 @@
     </div>
   </div>
 
+  <script src="vendor/html2canvas.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 {
   "name": "nk-helper-desktop",
-  "version": "3.8.33",
+  "version": "3.8.36",
   "description": "NK BackOffice Helper — Enterprise Desktop App",
   "main": "main/main.js",
   "author": "NK Helper Team",
@@ -14,7 +14,8 @@
   "dependencies": {
     "bcryptjs": "2.4.3",
     "electron-store": "8.2.0",
-    "exceljs": "4.4.0"
+    "exceljs": "4.4.0",
+    "html2canvas": "^1.4.1"
   },
   "devDependencies": {
     "electron": "31.7.7",

@@ -956,50 +956,79 @@ async function syncAppState() {
 
     const dashAuto = document.getElementById('dashAutoStatus');
     const dashAutoDesc = document.getElementById('dashAutoDesc');
-    const minVal = Number(withdrawCfg.minAmount || 0);
-    const maxVal = Number(withdrawCfg.maxAmount || 5000);
-    const currentProvider = String(withdrawCfg.provider || 'crs').toLowerCase().trim() === 'swiftpay' ? 'swiftpay' : 'crs';
-    const providerLabel = currentProvider === 'swiftpay' ? 'SwiftPay' : 'CRS';
+    const bankOn = Boolean(withdrawCfg.bankAutoApprove !== undefined ? withdrawCfg.bankAutoApprove : withdrawCfg.autoApprove);
+    const walletOn = Boolean(withdrawCfg.walletAutoApprove);
+    const bankProv = String(withdrawCfg.bankProvider || withdrawCfg.provider || 'crs').toUpperCase();
+    const walletProv = String(withdrawCfg.walletProvider || 'crs').toUpperCase();
 
-    if (withdrawCfg.autoApprove) {
-      dashAuto.textContent = `เปิดทำงาน (${providerLabel})`;
+    if (bankOn && walletOn) {
+      dashAuto.textContent = `เปิด Auto (ธนาคาร & Wallet)`;
       dashAuto.style.color = 'var(--success)';
-      dashAutoDesc.textContent = minVal > 0
-        ? `ส่ง ${providerLabel} ยอด ฿${minVal.toLocaleString('th-TH')} - ฿${maxVal.toLocaleString('th-TH')}`
-        : `ส่ง ${providerLabel} ยอดไม่เกิน ฿${maxVal.toLocaleString('th-TH')}`;
+      dashAutoDesc.textContent = `ธนาคาร ➔ ${bankProv} | TrueMoney ➔ ${walletProv}`;
+    } else if (bankOn) {
+      dashAuto.textContent = `เปิด Auto (ธนาคาร ➔ ${bankProv})`;
+      dashAuto.style.color = 'var(--success)';
+      dashAutoDesc.textContent = `ยอด ฿${Number(withdrawCfg.bankMinAmount || 0).toLocaleString('th-TH')} - ฿${Number(withdrawCfg.bankMaxAmount || 5000).toLocaleString('th-TH')}`;
+    } else if (walletOn) {
+      dashAuto.textContent = `เปิด Auto (Wallet ➔ ${walletProv})`;
+      dashAuto.style.color = 'var(--success)';
+      dashAutoDesc.textContent = `ยอด ฿${Number(withdrawCfg.walletMinAmount || 0).toLocaleString('th-TH')} - ฿${Number(withdrawCfg.walletMaxAmount || 5000).toLocaleString('th-TH')}`;
     } else {
       dashAuto.textContent = 'ปิดอยู่';
       dashAuto.style.color = 'var(--text-dim)';
-      dashAutoDesc.textContent = `Standby ตรวจสอบอย่างเดียว (เตรียมส่ง ${providerLabel})`;
+      dashAutoDesc.textContent = 'Standby ตรวจจับอย่างเดียว (ปิด Auto)';
     }
 
     // Withdraw Controls View
     const btnToggle = document.getElementById('btnWithdrawToggle');
     const statusText = document.getElementById('withdrawStatusText');
+
+    // 1. Bank inputs
+    const inputBankMin = document.getElementById('withdrawBankMinAmount');
+    const inputBankMax = document.getElementById('withdrawBankMaxAmount');
+    const selectBankProv = document.getElementById('withdrawBankProvider');
+    const toggleBank = document.getElementById('withdrawBankAutoToggle');
+
+    if (inputBankMin && document.activeElement !== inputBankMin) {
+      inputBankMin.value = withdrawCfg.bankMinAmount !== undefined ? withdrawCfg.bankMinAmount : (withdrawCfg.minAmount ?? 0);
+    }
+    if (inputBankMax && document.activeElement !== inputBankMax) {
+      inputBankMax.value = withdrawCfg.bankMaxAmount !== undefined ? withdrawCfg.bankMaxAmount : (withdrawCfg.maxAmount ?? 5000);
+    }
+    if (selectBankProv && document.activeElement !== selectBankProv) {
+      selectBankProv.value = withdrawCfg.bankProvider || withdrawCfg.provider || 'crs';
+    }
+    if (toggleBank) toggleBank.checked = bankOn;
+
+    // 2. TrueMoney inputs
+    const inputWalletMin = document.getElementById('withdrawWalletMinAmount');
+    const inputWalletMax = document.getElementById('withdrawWalletMaxAmount');
+    const selectWalletProv = document.getElementById('withdrawWalletProvider');
+    const toggleWallet = document.getElementById('withdrawWalletAutoToggle');
+
+    if (inputWalletMin && document.activeElement !== inputWalletMin) {
+      inputWalletMin.value = withdrawCfg.walletMinAmount !== undefined ? withdrawCfg.walletMinAmount : 0;
+    }
+    if (inputWalletMax && document.activeElement !== inputWalletMax) {
+      inputWalletMax.value = withdrawCfg.walletMaxAmount !== undefined ? withdrawCfg.walletMaxAmount : 5000;
+    }
+    if (selectWalletProv && document.activeElement !== selectWalletProv) {
+      selectWalletProv.value = withdrawCfg.walletProvider || 'crs';
+    }
+    if (toggleWallet) toggleWallet.checked = walletOn;
+
+    // Legacy mirror
     const autoToggle = document.getElementById('withdrawAutoApproveToggle');
-    const inputMinAmount = document.getElementById('withdrawMinAmount');
-    const inputMaxAmount = document.getElementById('withdrawMaxAmount');
-    const selectAutoProvider = document.getElementById('withdrawAutoProvider');
+    if (autoToggle) autoToggle.checked = Boolean(bankOn || walletOn);
 
-    if (inputMinAmount && document.activeElement !== inputMinAmount && withdrawCfg.minAmount !== undefined) {
-      inputMinAmount.value = withdrawCfg.minAmount;
-    }
-    if (inputMaxAmount && document.activeElement !== inputMaxAmount && withdrawCfg.maxAmount !== undefined) {
-      inputMaxAmount.value = withdrawCfg.maxAmount;
-    }
-    if (selectAutoProvider && document.activeElement !== selectAutoProvider && withdrawCfg.provider !== undefined) {
-      selectAutoProvider.value = withdrawCfg.provider;
-    }
-
-    autoToggle.checked = Boolean(withdrawCfg.autoApprove);
     if (withdrawCfg.active) {
       btnToggle.textContent = '⏹ หยุด Standby';
       btnToggle.className = 'btn btn-danger';
-      statusText.textContent = `สถานะ: ${withdrawSt.message || 'กำลังตรวจจับ (เรียลไทม์)...'}`;
+      statusText.innerHTML = `<span>สถานะ: ${withdrawSt.message || 'กำลังตรวจจับ (เรียลไทม์)...'}</span>`;
     } else {
       btnToggle.textContent = '▶ เริ่ม Standby';
       btnToggle.className = 'btn btn-accent';
-      statusText.textContent = `สถานะ: ${withdrawSt.message || 'หยุดอยู่'}`;
+      statusText.innerHTML = `<span>สถานะ: ${withdrawSt.message || 'หยุดอยู่'}</span>`;
     }
 
     // Render Withdraw Tables
@@ -1054,6 +1083,11 @@ function renderWithdrawTables(pendingItems, crsItems) {
           riskBadgeHtml = `<span class="badge-risk-warning" style="background:#e0e7ff; color:#3730a3; border:1px solid #c7d2fe;" title="${rf?.paymentReturnReason || item.note || 'Payment ปฏิเสธ'}">🔄 เปเม้นส่งกลับ</span>`;
         }
 
+        const isWallet = item.isWallet || /TRUE|WALLET/i.test(item.bankCode || '') || (item.bankCode === 'TRUEMONEY' || item.bankCode === 'TRUEWALLET');
+        const channelBadge = isWallet
+          ? '<span style="display:inline-flex; align-items:center; gap:3px; font-size:10.5px; font-weight:700; color:#ea580c; background:rgba(249,115,22,0.15); border:1px solid rgba(249,115,22,0.3); padding:1px 6px; border-radius:4px;">🟠 TrueMoney</span>'
+          : `<span style="display:inline-flex; align-items:center; gap:3px; font-size:10.5px; font-weight:700; color:#3b82f6; background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.3); padding:1px 6px; border-radius:4px;">🏦 ${item.bankCode || 'ธนาคาร'}</span>`;
+
         const bankInfo = (item.bankCode ? `${item.bankCode} ` : '') + (item.bankNumber || '');
         const noteHtml = item.note ? `<div style="font-size:11px; color:#4f46e5; margin-top:2px; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${item.note}">💬 ${item.note}</div>` : '';
 
@@ -1061,8 +1095,11 @@ function renderWithdrawTables(pendingItems, crsItems) {
           <tr>
             <td><strong>#${item.id}</strong></td>
             <td>
-              <div style="font-weight:700; color:var(--text-main);">${item.username}</div>
-              <div style="font-size:11px; color:var(--text-muted);">${bankInfo || '-'}</div>
+              <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                <span style="font-weight:700; color:var(--text-main);">${item.username}</span>
+                ${channelBadge}
+              </div>
+              <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">${bankInfo || '-'}</div>
               ${noteHtml}
             </td>
             <td>${item.name}</td>
@@ -1122,10 +1159,20 @@ function renderWithdrawTables(pendingItems, crsItems) {
         const statusBadge = isPaygateSent
           ? '<span class="badge-status pending" style="background:#e0e7ff; color:#3730a3;">⏳ รอเปเม้นจ่ายเงิน</span>'
           : '<span class="badge-status success">ส่งต่อ CRS แล้ว</span>';
+        const isWalletCrs = item.isWallet || /TRUE|WALLET/i.test(item.bankCode || '') || (item.bankCode === 'TRUEMONEY' || item.bankCode === 'TRUEWALLET');
+        const channelBadgeCrs = isWalletCrs
+          ? '<span style="display:inline-flex; align-items:center; gap:3px; font-size:10px; font-weight:700; color:#ea580c; background:rgba(249,115,22,0.15); border:1px solid rgba(249,115,22,0.3); padding:1px 5px; border-radius:4px;">🟠 Wallet</span>'
+          : `<span style="display:inline-flex; align-items:center; gap:3px; font-size:10px; font-weight:700; color:#3b82f6; background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.3); padding:1px 5px; border-radius:4px;">🏦 ${item.bankCode || 'Bank'}</span>`;
+
         return `
           <tr>
             <td><strong>#${item.id}</strong></td>
-            <td>${item.username}</td>
+            <td>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <span>${item.username}</span>
+                ${channelBadgeCrs}
+              </div>
+            </td>
             <td>${item.name}</td>
             <td style="color:var(--success); font-weight:700;">฿${Number(item.amount || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
             <td>${statusBadge}</td>
@@ -1757,7 +1804,7 @@ setInterval(syncAppState, 3000);
 syncAppState();
 
 // ==========================================
-// 2. WITHDRAW STANDBY CONTROLS
+// 2. WITHDRAW STANDBY CONTROLS (Dual Channel: Bank & TrueMoney)
 // ==========================================
 document.getElementById('btnWithdrawToggle').addEventListener('click', async () => {
   const store = await window.nkAPI.getAllStore();
@@ -1765,34 +1812,78 @@ document.getElementById('btnWithdrawToggle').addEventListener('click', async () 
   if (cfg.active) {
     await window.nkAPI.stopWithdraw();
   } else {
-    const minAmount = Number(document.getElementById('withdrawMinAmount')?.value) || 0;
-    const maxAmount = Number(document.getElementById('withdrawMaxAmount')?.value) || 5000;
-    const provider = document.getElementById('withdrawAutoProvider')?.value || 'crs';
-    const autoApprove = document.getElementById('withdrawAutoApproveToggle').checked;
-    await window.nkAPI.startWithdraw({ intervalSec: 5, minAmount, maxAmount, autoApprove, provider });
+    const bankMinAmount = Number(document.getElementById('withdrawBankMinAmount')?.value) || 0;
+    const bankMaxAmount = Number(document.getElementById('withdrawBankMaxAmount')?.value) || 5000;
+    const bankProvider = document.getElementById('withdrawBankProvider')?.value || 'crs';
+    const bankAutoApprove = document.getElementById('withdrawBankAutoToggle')?.checked || false;
+
+    const walletMinAmount = Number(document.getElementById('withdrawWalletMinAmount')?.value) || 0;
+    const walletMaxAmount = Number(document.getElementById('withdrawWalletMaxAmount')?.value) || 5000;
+    const walletProvider = document.getElementById('withdrawWalletProvider')?.value || 'crs';
+    const walletAutoApprove = document.getElementById('withdrawWalletAutoToggle')?.checked || false;
+
+    await window.nkAPI.startWithdraw({
+      intervalSec: 5,
+      bankMinAmount,
+      bankMaxAmount,
+      bankProvider,
+      bankAutoApprove,
+      walletMinAmount,
+      walletMaxAmount,
+      walletProvider,
+      walletAutoApprove
+    });
   }
   syncAppState();
 });
 
-const onWithdrawLimitsChanged = async () => {
-  const minAmount = Number(document.getElementById('withdrawMinAmount')?.value) || 0;
-  const maxAmount = Number(document.getElementById('withdrawMaxAmount')?.value) || 5000;
-  const provider = document.getElementById('withdrawAutoProvider')?.value || 'crs';
+// Bank settings change
+const onBankLimitsChanged = async () => {
+  const bankMinAmount = Number(document.getElementById('withdrawBankMinAmount')?.value) || 0;
+  const bankMaxAmount = Number(document.getElementById('withdrawBankMaxAmount')?.value) || 5000;
+  const bankProvider = document.getElementById('withdrawBankProvider')?.value || 'crs';
   if (window.nkAPI.updateWithdrawConfig) {
-    await window.nkAPI.updateWithdrawConfig({ minAmount, maxAmount, provider });
+    await window.nkAPI.updateWithdrawConfig({ bankMinAmount, bankMaxAmount, bankProvider });
   }
   syncAppState();
 };
+document.getElementById('withdrawBankMinAmount')?.addEventListener('change', onBankLimitsChanged);
+document.getElementById('withdrawBankMaxAmount')?.addEventListener('change', onBankLimitsChanged);
+document.getElementById('withdrawBankProvider')?.addEventListener('change', onBankLimitsChanged);
 
-document.getElementById('withdrawMinAmount')?.addEventListener('change', onWithdrawLimitsChanged);
-document.getElementById('withdrawMaxAmount')?.addEventListener('change', onWithdrawLimitsChanged);
-document.getElementById('withdrawAutoProvider')?.addEventListener('change', onWithdrawLimitsChanged);
+// Bank Auto Approve toggle
+document.getElementById('withdrawBankAutoToggle')?.addEventListener('change', async (e) => {
+  const minAmount = Number(document.getElementById('withdrawBankMinAmount')?.value) || 0;
+  const maxAmount = Number(document.getElementById('withdrawBankMaxAmount')?.value) || 5000;
+  const provider = document.getElementById('withdrawBankProvider')?.value || 'crs';
+  const res = await window.nkAPI.setWithdrawAutoApprove('bank', e.target.checked, { minAmount, maxAmount, provider });
+  if (!res.ok && res.error) {
+    await window.showAlertDialog({ title: 'เกิดข้อผิดพลาด', message: res.error, type: 'danger' });
+    e.target.checked = false;
+  }
+  syncAppState();
+});
 
-document.getElementById('withdrawAutoApproveToggle').addEventListener('change', async (e) => {
-  const minAmount = Number(document.getElementById('withdrawMinAmount')?.value) || 0;
-  const maxAmount = Number(document.getElementById('withdrawMaxAmount')?.value) || 5000;
-  const provider = document.getElementById('withdrawAutoProvider')?.value || 'crs';
-  const res = await window.nkAPI.setWithdrawAutoApprove(e.target.checked, { minAmount, maxAmount, provider });
+// TrueMoney settings change
+const onWalletLimitsChanged = async () => {
+  const walletMinAmount = Number(document.getElementById('withdrawWalletMinAmount')?.value) || 0;
+  const walletMaxAmount = Number(document.getElementById('withdrawWalletMaxAmount')?.value) || 5000;
+  const walletProvider = document.getElementById('withdrawWalletProvider')?.value || 'crs';
+  if (window.nkAPI.updateWithdrawConfig) {
+    await window.nkAPI.updateWithdrawConfig({ walletMinAmount, walletMaxAmount, walletProvider });
+  }
+  syncAppState();
+};
+document.getElementById('withdrawWalletMinAmount')?.addEventListener('change', onWalletLimitsChanged);
+document.getElementById('withdrawWalletMaxAmount')?.addEventListener('change', onWalletLimitsChanged);
+document.getElementById('withdrawWalletProvider')?.addEventListener('change', onWalletLimitsChanged);
+
+// TrueMoney Auto Approve toggle
+document.getElementById('withdrawWalletAutoToggle')?.addEventListener('change', async (e) => {
+  const minAmount = Number(document.getElementById('withdrawWalletMinAmount')?.value) || 0;
+  const maxAmount = Number(document.getElementById('withdrawWalletMaxAmount')?.value) || 5000;
+  const provider = document.getElementById('withdrawWalletProvider')?.value || 'crs';
+  const res = await window.nkAPI.setWithdrawAutoApprove('wallet', e.target.checked, { minAmount, maxAmount, provider });
   if (!res.ok && res.error) {
     await window.showAlertDialog({ title: 'เกิดข้อผิดพลาด', message: res.error, type: 'danger' });
     e.target.checked = false;
@@ -6463,6 +6554,170 @@ function formatDailyNum(val) {
   return num.toLocaleString('th-TH');
 }
 
+let lastDailyReportData = null;
+let selectedDailySummaryDate = null;
+
+function generateDailySummaryText(dateStr, options = {}) {
+  if (!lastDailyReportData || !lastDailyReportData.rows) return '';
+  const rows = lastDailyReportData.rows;
+  const row = rows.find(r => r.dateStr === dateStr) || {};
+
+  // 1. Site name
+  const rawSite = lastDailyReportData.siteName || 'JGAMING88';
+  const siteName = rawSite.replace(/\s+/g, '').toUpperCase();
+
+  // 2. Date formatting (DD.MM.YY in Buddhist Era)
+  let dateFormatted = dateStr;
+  if (dateStr && dateStr.includes('-')) {
+    const [y, m, d] = dateStr.split('-');
+    const beYear2 = String(Number(y) + 543).slice(-2);
+    dateFormatted = `${d}.${m}.${beYear2}`;
+  }
+
+  // 3. Line inquiry & register
+  const lineInquiry = Number(options.lineInquiry ?? 0);
+  const lineRegister = Number(options.lineRegister ?? 0);
+  const linePercent = lineInquiry > 0 ? ((lineRegister / lineInquiry) * 100) : 0;
+
+  // 4. Dashboard Summary
+  const regCount = Number(row.register || 0);
+  const regDepositCount = Number(row.registerWithDeposit || 0);
+  const regPercent = regCount > 0 ? ((regDepositCount / regCount) * 100) : 0;
+
+  // 5. Daily Bonus
+  const bonusAmt = Number(row.bonus || 0) + Number(row.reward || 0);
+  const bonusPeople = Number(row.bonusCount || 0) + Number(row.rewardCount || 0);
+
+  // 6. Active Users
+  const activeCount = Number(row.activeMembers || 0);
+
+  const lines = [
+    `${siteName}\t\t`,
+    `\t\t`,
+    `วันที่ ${dateFormatted} เวลา 00:00 น.\t\t`,
+    `\t\t`,
+    `รายการลูกค้าทักเพจ/ไลน์\t\t`,
+    `Line\t\t`,
+    `ทักเข้ามา\t${lineInquiry.toFixed(2)} \tคน`,
+    `สมัคร\t${lineRegister.toFixed(2)} \tคน`,
+    `เปอร์เซ็นต์\t${linePercent.toFixed(2)} \t`,
+    `\t\t`,
+    `สรุป แดชบอร์ด   \t\t`,
+    `สมัคร\t${regCount.toFixed(2)} \tคน`,
+    `สมัครฝาก\t${regDepositCount.toFixed(2)} \tคน`,
+    `เปอร์เซ็นต์\t${regPercent.toFixed(2)} \t`,
+    `\t \t`,
+    `โบนัสประจำวัน   \t\t`,
+    `จำนวนคน\t${bonusPeople.toFixed(2)} \tคน`,
+    `ยอดโบนัส\t${bonusAmt.toFixed(2)} \t`,
+    `\t\t`,
+    `ยอด Active ลูกค้า   \t\t`,
+    `\t\t`,
+    `ใช้งาน\t${activeCount.toFixed(2)}\tคน`
+  ];
+
+  return lines.join('\n');
+}
+
+function updateDailyTextSummary(reportData = null) {
+  if (reportData) lastDailyReportData = reportData;
+  if (!lastDailyReportData || !lastDailyReportData.rows) return;
+
+  const selDate = document.getElementById('selDailySummaryDate');
+  const txtResult = document.getElementById('txtDailySummaryResult');
+  const inputLineInq = document.getElementById('inputDailySummaryLineInquiry');
+  const inputLineReg = document.getElementById('inputDailySummaryLineRegister');
+  const inputBonusCount = document.getElementById('inputDailySummaryBonusCount');
+
+  if (!selDate || !txtResult) return;
+
+  const rows = lastDailyReportData.rows || [];
+  const yesterdayStr = lastDailyReportData.yesterdayStr || '';
+
+  const completedRows = rows.filter(r => r.isCompleted || r.dateStr <= yesterdayStr);
+  completedRows.sort((a, b) => b.dateStr.localeCompare(a.dateStr));
+
+  let targetDate = selectedDailySummaryDate || yesterdayStr;
+  if (!completedRows.some(r => r.dateStr === targetDate) && completedRows.length > 0) {
+    targetDate = completedRows[0].dateStr;
+  }
+
+  // Check if options need rebuild
+  const existingValues = Array.from(selDate.options).map(o => o.value);
+  const newValues = completedRows.map(r => r.dateStr);
+  const needsRebuild = existingValues.length !== newValues.length || existingValues.some((v, idx) => v !== newValues[idx]);
+
+  if (needsRebuild) {
+    selDate.innerHTML = '';
+    completedRows.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.dateStr;
+      const isYest = r.dateStr === yesterdayStr;
+      const [y, m, d] = r.dateStr.split('-');
+      const beYear = Number(y) + 543;
+      opt.textContent = `วันที่ ${d}.${m}.${beYear} ${isYest ? '(เมื่อวาน)' : ''}`;
+      selDate.appendChild(opt);
+    });
+  }
+
+  selDate.value = targetDate;
+  selectedDailySummaryDate = targetDate;
+
+  const selectedRow = rows.find(r => r.dateStr === targetDate) || {};
+  if (inputBonusCount) {
+    inputBonusCount.value = String(Number(selectedRow.bonusCount || 0) + Number(selectedRow.rewardCount || 0));
+  }
+
+  const options = {
+    lineInquiry: inputLineInq?.value || 0,
+    lineRegister: inputLineReg?.value || 0
+  };
+
+  txtResult.value = generateDailySummaryText(targetDate, options);
+}
+
+function initDailyTextSummaryListeners() {
+  const selDate = document.getElementById('selDailySummaryDate');
+  const inputLineInq = document.getElementById('inputDailySummaryLineInquiry');
+  const inputLineReg = document.getElementById('inputDailySummaryLineRegister');
+  const inputBonusCount = document.getElementById('inputDailySummaryBonusCount');
+  const btnCopy = document.getElementById('btnCopyDailySummary');
+  const txtCopyLabel = document.getElementById('txtCopyDailySummaryLabel');
+  const txtResult = document.getElementById('txtDailySummaryResult');
+
+  selDate?.addEventListener('change', () => {
+    selectedDailySummaryDate = selDate.value;
+    updateDailyTextSummary();
+  });
+
+  const onInputChange = () => {
+    updateDailyTextSummary();
+  };
+
+  inputLineInq?.addEventListener('input', onInputChange);
+  inputLineReg?.addEventListener('input', onInputChange);
+  btnCopy?.addEventListener('click', async () => {
+    if (!txtResult?.value) return;
+    try {
+      await navigator.clipboard.writeText(txtResult.value);
+      if (txtCopyLabel) {
+        const orig = txtCopyLabel.textContent;
+        txtCopyLabel.textContent = '✓ คัดลอกเรียบร้อยแล้ว!';
+        btnCopy.style.background = '#10b981';
+        btnCopy.style.borderColor = '#10b981';
+        setTimeout(() => {
+          txtCopyLabel.textContent = orig;
+          btnCopy.style.background = '';
+          btnCopy.style.borderColor = '';
+        }, 2000);
+      }
+    } catch (err) {
+      txtResult.select();
+      document.execCommand('copy');
+    }
+  });
+}
+
 function initDailyReportTable() {
   const selMonth = document.getElementById('selDailyMonth');
   const btnRefresh = document.getElementById('btnDailyRefresh');
@@ -6555,8 +6810,132 @@ function initDailyReportTable() {
     });
   }
 
+  // Capture Button listener
+  const btnCapture = document.getElementById('btnDailyCapture');
+  if (btnCapture) {
+    btnCapture.addEventListener('click', captureDailyReportTable);
+  }
+
+  // Fullscreen / Expand Button listener
+  const btnExpand = document.getElementById('btnDailyExpand');
+  if (btnExpand) {
+    btnExpand.addEventListener('click', () => toggleDailyReportExpand());
+  }
+
+  // Initialize daily text summary listeners
+  initDailyTextSummaryListeners();
+
   // Initial load
   loadDailyReportTable(false);
+}
+
+function toggleDailyReportExpand(force) {
+  const card = document.getElementById('cardDailyReport');
+  if (!card) return;
+  const isExp = typeof force === 'boolean' ? force : !card.classList.contains('daily-report-expanded');
+  card.classList.toggle('daily-report-expanded', isExp);
+  const icon = document.getElementById('iconDailyExpand');
+  const txt = document.getElementById('txtDailyExpand');
+  if (icon) icon.textContent = isExp ? '✕' : '⛶';
+  if (txt) txt.textContent = isExp ? 'ย่อมุมมอง' : 'ขยายเต็มจอ';
+}
+
+// Global Escape listener to exit expanded mode
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    const card = document.getElementById('cardDailyReport');
+    if (card && card.classList.contains('daily-report-expanded')) {
+      toggleDailyReportExpand(false);
+    }
+  }
+});
+
+async function captureDailyReportTable() {
+  const table = document.getElementById('dailyReportTable');
+  const btnCapture = document.getElementById('btnDailyCapture');
+  const txtCapture = document.getElementById('txtDailyCapture');
+  if (!table) return;
+
+  const originalHtml = btnCapture ? btnCapture.innerHTML : '';
+  if (btnCapture) {
+    btnCapture.disabled = true;
+    btnCapture.innerHTML = '<span>⏳</span><span>กำลังแคปภาพ...</span>';
+  }
+
+  try {
+    const h2c = window.html2canvas || (typeof html2canvas !== 'undefined' ? html2canvas : null);
+    if (!h2c) {
+      throw new Error('ไม่พบไลบรารี html2canvas ในระบบ กรุณารีสตาร์ทโปรแกรม');
+    }
+
+    // Determine theme background
+    const isLight = document.body.classList.contains('light-theme');
+    const bgCol = isLight ? '#ffffff' : '#0f172a';
+
+    // Capture the entire table cleanly: all 16 columns and all rows including footer
+    const canvas = await h2c(table, {
+      scale: 2,
+      backgroundColor: bgCol,
+      useCORS: true,
+      logging: false,
+      scrollX: 0,
+      scrollY: 0,
+      windowWidth: Math.max(table.scrollWidth + 40, 1200),
+      onclone: (clonedDoc) => {
+        const clonedTable = clonedDoc.getElementById('dailyReportTable');
+        if (clonedTable) {
+          clonedTable.style.transform = 'none';
+          clonedTable.style.margin = '0';
+          // Force all sticky headers and cells to static in clone to prevent misalignment
+          const stickyCells = clonedTable.querySelectorAll('th, td');
+          stickyCells.forEach(cell => {
+            cell.style.position = 'static';
+          });
+        }
+      }
+    });
+
+    const dataUrl = canvas.toDataURL('image/png');
+    const nowStr = new Date().toISOString().slice(0, 10);
+    const siteTitle = (document.getElementById('thDailySiteTitle')?.textContent || '').trim().replace(/[^a-zA-Z0-9_\-\u0E00-\u0E7F]/g, '_');
+    const defaultFilename = `ตารางสรุปรายวัน_${siteTitle || 'NK'}_${dailyReportCurrentYm || nowStr}`;
+
+    // 1. Copy directly to clipboard for immediate paste (Ctrl+V) into Line / Telegram / Chat
+    if (window.nkAPI && window.nkAPI.writeClipboardImage) {
+      try {
+        await window.nkAPI.writeClipboardImage(dataUrl);
+      } catch (clipErr) {
+        console.warn('Failed auto clipboard copy:', clipErr);
+      }
+    }
+
+    // 2. Open Annotation Modal so user can review the full image, draw annotations, or click save
+    if (typeof openCaptureAnnotationModal === 'function') {
+      openCaptureAnnotationModal(dataUrl, defaultFilename);
+    }
+
+    showToast({
+      type: 'success',
+      badge: '📸 แคปตาราง',
+      title: 'แคปตารางสรุปรายวันสำเร็จ!',
+      detail: 'คัดลอกรูปลง Clipboard เรียบร้อยแล้ว (กด Ctrl+V เพื่อวางรูปได้ทันที) หรือกดบันทึกรูปภาพจากหน้าต่างพรีวิว',
+      badgeColor: '#10b981'
+    });
+  } catch (err) {
+    console.error('[DailyReport] Capture error:', err);
+    showToast({
+      type: 'error',
+      badge: 'Capture',
+      title: '❌ แคปภาพตารางไม่สำเร็จ',
+      detail: err.message,
+      badgeColor: '#ef4444'
+    });
+  } finally {
+    if (btnCapture) {
+      btnCapture.innerHTML = originalHtml || '<span>📸</span><span id="txtDailyCapture">แคปตาราง</span>';
+      btnCapture.disabled = false;
+    }
+  }
 }
 
 let isDailyReportLoading = false;
@@ -6657,6 +7036,9 @@ async function loadDailyReportTable(forceSync = false) {
         </tr>
       `;
     }
+
+    // Update Daily Text Summary box
+    updateDailyTextSummary(res);
 
     if (forceSync) {
       showToast({

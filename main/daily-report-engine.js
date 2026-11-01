@@ -45,7 +45,7 @@ function getDaysInMonth(year, month) {
   return new Date(Number(year), Number(month), 0).getDate();
 }
 
-const CACHE_VERSION = 2; // v2: includes adjustments in manualDeposit and manualWithdraw
+const CACHE_VERSION = 3; // v3: includes bonus and reward recipient counts
 
 /**
  * Truncate decimals completely (drop fractional part, take only integer)
@@ -140,10 +140,12 @@ function mapSummaryToRow(dayNumStr, dateStr, s = {}) {
     manualDeposit: rawManualDep + adjustIn,
     manualWithdraw: rawManualWd + adjustOut,
     bonus: toInt(s.bonus_deposit?.bonus ?? s.bonus_deposit?.amount),
+    bonusCount: toInt(s.bonus_deposit?.count ?? s.bonus_deposit?.member_count ?? s.bonus_deposit?.user_count),
     referral: toInt(s.referral?.amount),
     cashback: toInt(s.loss_cashback),
     luckyWheel: toInt(s.lucky_wheel),
     reward: toInt(s.reward_credit?.amount),
+    rewardCount: toInt(s.reward_credit?.count ?? s.reward_credit?.member_count ?? s.reward_credit?.user_count),
     deposit: depositAmt,
     withdraw: withdrawAmt,
     profitLoss,
@@ -167,10 +169,12 @@ function createEmptyRow(dayNumStr, dateStr) {
     manualDeposit: 0,
     manualWithdraw: 0,
     bonus: 0,
+    bonusCount: 0,
     referral: 0,
     cashback: 0,
     luckyWheel: 0,
     reward: 0,
+    rewardCount: 0,
     deposit: 0,
     withdraw: 0,
     profitLoss: 0,
@@ -298,10 +302,12 @@ async function getMonthTableData(targetYearMonth = null, forceSync = false) {
     manualDeposit: 0,
     manualWithdraw: 0,
     bonus: 0,
+    bonusCount: 0,
     referral: 0,
     cashback: 0,
     luckyWheel: 0,
     reward: 0,
+    rewardCount: 0,
     deposit: 0,
     withdraw: 0,
     profitLoss: 0,
@@ -327,10 +333,12 @@ async function getMonthTableData(targetYearMonth = null, forceSync = false) {
         manualDeposit: toInt(row.manualDeposit),
         manualWithdraw: toInt(row.manualWithdraw),
         bonus: toInt(row.bonus),
+        bonusCount: toInt(row.bonusCount),
         referral: toInt(row.referral),
         cashback: toInt(row.cashback),
         luckyWheel: toInt(row.luckyWheel),
         reward: toInt(row.reward),
+        rewardCount: toInt(row.rewardCount),
         deposit: toInt(row.deposit),
         withdraw: toInt(row.withdraw),
         profitLoss: toInt(row.deposit) - toInt(row.withdraw),
@@ -348,10 +356,12 @@ async function getMonthTableData(targetYearMonth = null, forceSync = false) {
       total.manualDeposit += row.manualDeposit;
       total.manualWithdraw += row.manualWithdraw;
       total.bonus += row.bonus;
+      total.bonusCount += row.bonusCount;
       total.referral += row.referral;
       total.cashback += row.cashback;
       total.luckyWheel += row.luckyWheel;
       total.reward += row.reward;
+      total.rewardCount += row.rewardCount;
       total.deposit += row.deposit;
       total.withdraw += row.withdraw;
       total.profitLoss += row.profitLoss;

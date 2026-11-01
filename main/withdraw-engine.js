@@ -149,6 +149,25 @@ function isCrsManagedWithdraw(tx) {
   return false;
 }
 
+function isTrueMoneyTransaction(tx) {
+  const code = String(
+    tx?.to_bank_code ||
+    tx?.from_bank_code ||
+    tx?.bank_code ||
+    tx?.bank?.code ||
+    tx?.method ||
+    ''
+  ).toUpperCase().trim();
+  if (code === 'TRUEWALLET' || code === 'TRUEMONEY' || code.includes('WALLET') || code.includes('TRUE')) {
+    return true;
+  }
+  const name = String(tx?.to_bank_name || tx?.bank?.name || '').toUpperCase();
+  if (name.includes('TRUEWALLET') || name.includes('TRUEMONEY') || name.includes('ทรูมันนี่') || name.includes('วอลเล็ท')) {
+    return true;
+  }
+  return false;
+}
+
 async function fetchPendingWithdrawals(context, limit = 200) {
   const pending = [];
   let page = 1;
@@ -691,14 +710,42 @@ async function pollWithdrawApi() {
       stop();
       return { ok: false, loggedOut: true };
     }
-    const cfg = _store.get('withdrawConfig', { active: false, intervalSec: 5, minAmount: 0, maxAmount: 5000, autoApprove: false, provider: 'crs' });
+    const cfg = _store.get('withdrawConfig', {
+      active: false,
+      intervalSec: 5,
+      minAmount: 0,
+      maxAmount: 5000,
+      autoApprove: false,
+      provider: 'crs',
+      bankAutoApprove: false,
+      bankMinAmount: 0,
+      bankMaxAmount: 5000,
+      bankProvider: 'crs',
+      walletAutoApprove: false,
+      walletMinAmount: 0,
+      walletMaxAmount: 5000,
+      walletProvider: 'crs'
+    });
     if (!cfg.active) return { ok: false, inactive: true };
 
     const intervalSec = Math.max(3, Math.min(3600, Math.floor(Number(cfg.intervalSec) || 5)));
-    const minAmount = Number(cfg.minAmount) >= 0 ? Number(cfg.minAmount) : 0;
-    const maxAmount = Number(cfg.maxAmount) > 0 ? Number(cfg.maxAmount) : 5000;
-    const autoApprove = Boolean(cfg.autoApprove);
-    const provider = String(cfg.provider || 'crs').toLowerCase().trim() === 'swiftpay' ? 'swiftpay' : 'crs';
+    
+    // Bank config with fallback
+    const bankAutoApprove = cfg.bankAutoApprove !== undefined ? Boolean(cfg.bankAutoApprove) : Boolean(cfg.autoApprove);
+    const bankMinAmount = Number(cfg.bankMinAmount !== undefined ? cfg.bankMinAmount : (cfg.minAmount ?? 0));
+    const bankMaxAmount = Number(cfg.bankMaxAmount !== undefined ? cfg.bankMaxAmount : (cfg.maxAmount ?? 5000));
+    const bankProvider = String(cfg.bankProvider || cfg.provider || 'crs').toLowerCase().trim() === 'swiftpay' ? 'swiftpay' : 'crs';
+
+    // Wallet config
+    const walletAutoApprove = Boolean(cfg.walletAutoApprove);
+    const walletMinAmount = Number(cfg.walletMinAmount !== undefined ? cfg.walletMinAmount : 0);
+    const walletMaxAmount = Number(cfg.walletMaxAmount !== undefined ? cfg.walletMaxAmount : 5000);
+    const walletProvider = String(cfg.walletProvider || 'crs').toLowerCase().trim() === 'swiftpay' ? 'swiftpay' : 'crs';
+
+    const minAmount = bankMinAmount;
+    const maxAmount = bankMaxAmount;
+    const autoApprove = bankAutoApprove || walletAutoApprove;
+    const provider = bankProvider;
     const lastCheckAt = Date.now();
 
     try {
@@ -716,20 +763,45 @@ async function pollWithdrawApi() {
       );
       const ledgerUnknownCount = Object.values(ledger).filter((x) => x?.state === 'unknown' && Date.now() - Number(x?.updatedAt || 0) <= 60000).length;
 
-      let effectiveAutoApprove = autoApprove && ledgerUnknownCount === 0;
-      if (autoApprove && !effectiveAutoApprove) {
-        _store.set('withdrawConfig', { ...cfg, autoApprove: false, safetyStopped: true });
+      let effectiveBankAutoApprove = bankAutoApprove && ledgerUnknownCount === 0;
+      let effectiveWalletAutoApprove = walletAutoApprove && ledgerUnknownCount === 0;
+      let effectiveAutoApprove = effectiveBankAutoApprove || effectiveWalletAutoApprove;
+
+      if ((bankAutoApprove && !effectiveBankAutoApprove) || (walletAutoApprove && !effectiveWalletAutoApprove)) {
+        _store.set('withdrawConfig', {
+          ...cfg,
+          bankAutoApprove: false,
+          walletAutoApprove: false,
+          autoApprove: false,
+          safetyStopped: true
+        });
       }
 
-      const eligible = actionable.filter((x) => {
+      const bankEligible = [];
+      const walletEligible = [];
+
+      for (const x of actionable) {
         const id = approvalLedgerId(x);
+        if (!id || lockedIds.has(id)) continue;
         const rf = evaluateWithdrawRisk(x);
-        // SAFETY: Never auto-approve critical risk items (e.g. bank changed <24h) or items exceeding threshold
-        if (rf.level === 'critical' || rf.isLargeAmount) return false;
+        if (rf.level === 'critical' || rf.isLargeAmount) continue;
+
         const amt = Number(x.amount);
-        const isWithinRange = Number.isFinite(amt) && amt > 0 && amt >= minAmount && amt <= maxAmount;
-        return id && !lockedIds.has(id) && isWithinRange;
-      });
+        if (!Number.isFinite(amt) || amt <= 0) continue;
+
+        const isWallet = isTrueMoneyTransaction(x);
+        if (isWallet) {
+          if (effectiveWalletAutoApprove && amt >= walletMinAmount && amt <= walletMaxAmount) {
+            walletEligible.push(x);
+          }
+        } else {
+          if (effectiveBankAutoApprove && amt >= bankMinAmount && amt <= bankMaxAmount) {
+            bankEligible.push(x);
+          }
+        }
+      }
+
+      const eligible = [...bankEligible, ...walletEligible];
 
       const loginTime = Number(_store.get('session.loginTime') || 0);
       const currentActionableIds = actionable.map((x) => String(x.id || x.transaction_id || '')).filter(Boolean);
@@ -761,14 +833,30 @@ async function pollWithdrawApi() {
 
       let approval = { approved: [], uncertain: [], skippedDuplicate: [] };
       let approvalError = null;
-      if (effectiveAutoApprove && eligible.length) {
+
+      if (effectiveBankAutoApprove && bankEligible.length > 0) {
         try {
-          approval = await autoApproveWithdrawals(eligible, 30, context, provider);
+          const resBank = await autoApproveWithdrawals(bankEligible, 30, context, bankProvider);
+          approval.approved.push(...resBank.approved);
+          approval.uncertain.push(...resBank.uncertain);
+          approval.skippedDuplicate.push(...resBank.skippedDuplicate);
         } catch (approveErr) {
-          approvalError = approveErr?.message || String(approveErr);
-          // Don't crash the poll — just report error in status message
+          approvalError = (approvalError ? approvalError + ' | ' : '') + `Bank: ${approveErr?.message || String(approveErr)}`;
         }
-      } else {
+      }
+
+      if (effectiveWalletAutoApprove && walletEligible.length > 0) {
+        try {
+          const resWallet = await autoApproveWithdrawals(walletEligible, 30, context, walletProvider);
+          approval.approved.push(...resWallet.approved);
+          approval.uncertain.push(...resWallet.uncertain);
+          approval.skippedDuplicate.push(...resWallet.skippedDuplicate);
+        } catch (approveErr) {
+          approvalError = (approvalError ? approvalError + ' | ' : '') + `TrueMoney: ${approveErr?.message || String(approveErr)}`;
+        }
+      }
+
+      if (!effectiveAutoApprove) {
         const settings = _store.get('settings', {});
         if (settings.notifyWithdraw !== false) {
           for (const item of newItems.slice(0, 10)) {
@@ -793,17 +881,22 @@ async function pollWithdrawApi() {
       const approvedThisCycle = approval.approved.length;
       const uncertainCount = approval.uncertain.length;
 
+      let activeChannels = [];
+      if (effectiveBankAutoApprove) activeChannels.push(`ธนาคาร (${bankProvider.toUpperCase()})`);
+      if (effectiveWalletAutoApprove) activeChannels.push(`TrueMoney (${walletProvider.toUpperCase()})`);
+      const channelSummary = activeChannels.length ? `[Auto: ${activeChannels.join(' + ')}]` : '[Auto: ปิด]';
+
       const message = approvalError
         ? `⚠️ Auto Approve ล้มเหลว: ${approvalError} · มีรายการรอ ${actionable.length} รายการ`
         : uncertainCount
           ? `หยุด Auto Approve เพื่อความปลอดภัย · มี ${uncertainCount} รายการไม่แน่ชัด`
           : approvedThisCycle
-            ? `อนุมัติสำเร็จ ${approvedThisCycle} รายการ · ส่งต่อ CRS แล้ว`
+            ? `อนุมัติสำเร็จ ${approvedThisCycle} รายการ · ส่งต่อเกตเวย์แล้ว`
             : actionable.length
-              ? `รออนุมัติ ${actionable.length} รายการ (ตามยอด ${eligible.length}) · CRS รับช่วง ${crs.length}`
+              ? `รออนุมัติ ${actionable.length} รายการ (ตรงเกณฑ์ Auto ${eligible.length}) · CRS รับช่วง ${crs.length}`
               : crs.length
                 ? `ไม่มีรายการรออนุมัติ · CRS กำลังทำรายการ ${crs.length} รายการ`
-                : 'Standby · ไม่มีรายการถอนใหม่';
+                : `Standby · ไม่มีรายการถอนใหม่ ${channelSummary}`;
 
       const nextState = {
         status: actionable.length || uncertainCount ? 'pending' : 'monitoring',
@@ -814,13 +907,14 @@ async function pollWithdrawApi() {
         eligibleCount: eligible.length,
         crsCount: crs.length,
         rawPendingCount: pending.length,
-        overLimitCount: actionable.filter((x) => Number(x.amount) > maxAmount).length,
-        underLimitCount: actionable.filter((x) => Number(x.amount) < minAmount).length,
+        overLimitCount: actionable.filter((x) => Number(x.amount) > bankMaxAmount).length,
+        underLimitCount: actionable.filter((x) => Number(x.amount) < bankMinAmount).length,
         approvedThisCycle,
         lastCheckAt,
         nextCheckAt: lastCheckAt + intervalSec * 1000,
         currentItems: actionable.slice(0, 30).map((x) => {
           const rf = evaluateWithdrawRisk(x);
+          const isWallet = isTrueMoneyTransaction(x);
           return {
             id: x.id || x.transaction_id || '',
             memberId: x.member_id || x.member?.id || '',
@@ -829,6 +923,7 @@ async function pollWithdrawApi() {
             amount: Number(x.amount || 0),
             bankCode: x.to_bank_code || x.from_bank_code || x.method || '',
             bankNumber: x.to_bank_number || x.from_bank_number || '',
+            isWallet,
             clientIp: x.client_ip || x.ip || '',
             requestedAt: x.requested_at || x.transaction_at || x.created_at || '',
             note: String(x.note || ''),
@@ -837,23 +932,35 @@ async function pollWithdrawApi() {
             riskFlags: rf
           };
         }),
-        crsItems: crs.slice(0, 30).map((x) => ({
-          id: x.id || x.transaction_id || '',
-          memberId: x.member_id || x.member?.id || '',
-          username: x.game_username || x.member?.game_username || '-',
-          name: x.fullname || x.name || x.member?.fullname || x.member?.name || '-',
-          amount: Number(x.amount || 0),
-          bankCode: x.to_bank_code || x.from_bank_code || x.method || '',
-          bankNumber: x.to_bank_number || x.from_bank_number || '',
-          note: String(x.note || ''),
-          rawStatus: String(x.raw_status || '')
-        })),
+        crsItems: crs.slice(0, 30).map((x) => {
+          const isWallet = isTrueMoneyTransaction(x);
+          return {
+            id: x.id || x.transaction_id || '',
+            memberId: x.member_id || x.member?.id || '',
+            username: x.game_username || x.member?.game_username || '-',
+            name: x.fullname || x.name || x.member?.fullname || x.member?.name || '-',
+            amount: Number(x.amount || 0),
+            bankCode: x.to_bank_code || x.from_bank_code || x.method || '',
+            bankNumber: x.to_bank_number || x.from_bank_number || '',
+            isWallet,
+            note: String(x.note || ''),
+            rawStatus: String(x.raw_status || '')
+          };
+        }),
         message,
         intervalSec,
-        minAmount,
-        maxAmount,
+        minAmount: bankMinAmount,
+        maxAmount: bankMaxAmount,
         autoApprove: effectiveAutoApprove,
-        provider,
+        provider: bankProvider,
+        bankAutoApprove: effectiveBankAutoApprove,
+        bankMinAmount,
+        bankMaxAmount,
+        bankProvider,
+        walletAutoApprove: effectiveWalletAutoApprove,
+        walletMinAmount,
+        walletMaxAmount,
+        walletProvider,
         updatedAt: Date.now()
       };
       _store.set('withdrawState', nextState);
@@ -957,32 +1064,44 @@ function start(config = {}) {
   withdrawMemorySeen = null;
 
   const intervalSec = Math.max(3, Math.min(3600, Math.floor(Number(config.intervalSec) || 5)));
-  const minAmount = Number(config.minAmount) >= 0 ? Number(config.minAmount) : 0;
-  const maxAmount = Number(config.maxAmount) > 0 ? Number(config.maxAmount) : 5000;
-  const autoApprove = Boolean(config.autoApprove);
-  const provider = String(config.provider || 'crs').toLowerCase().trim() === 'swiftpay' ? 'swiftpay' : 'crs';
+  
+  // Bank config
+  const bankMinAmount = Number(config.bankMinAmount !== undefined ? config.bankMinAmount : (config.minAmount ?? 0));
+  const bankMaxAmount = Number(config.bankMaxAmount !== undefined ? config.bankMaxAmount : (config.maxAmount ?? 5000));
+  const bankAutoApprove = Boolean(config.bankAutoApprove !== undefined ? config.bankAutoApprove : config.autoApprove);
+  const bankProvider = String(config.bankProvider || config.provider || 'crs').toLowerCase().trim() === 'swiftpay' ? 'swiftpay' : 'crs';
 
-  _store.set('withdrawConfig', {
+  // Wallet config
+  const walletMinAmount = Number(config.walletMinAmount !== undefined ? config.walletMinAmount : 0);
+  const walletMaxAmount = Number(config.walletMaxAmount !== undefined ? config.walletMaxAmount : 5000);
+  const walletAutoApprove = Boolean(config.walletAutoApprove);
+  const walletProvider = String(config.walletProvider || 'crs').toLowerCase().trim() === 'swiftpay' ? 'swiftpay' : 'crs';
+
+  const cfg = {
     active: true,
     intervalSec,
-    minAmount,
-    maxAmount,
-    autoApprove,
-    provider,
+    bankMinAmount,
+    bankMaxAmount,
+    bankAutoApprove,
+    bankProvider,
+    walletMinAmount,
+    walletMaxAmount,
+    walletAutoApprove,
+    walletProvider,
+    minAmount: bankMinAmount,
+    maxAmount: bankMaxAmount,
+    autoApprove: bankAutoApprove || walletAutoApprove,
+    provider: bankProvider,
     updatedAt: Date.now()
-  });
+  };
 
+  _store.set('withdrawConfig', cfg);
   _store.set('withdrawState', {
     status: 'starting',
     monitoring: true,
     working: false,
     message: 'กำลังเริ่ม Standby Monitor (ตรวจจับเรียลไทม์)...',
-    intervalSec,
-    minAmount,
-    maxAmount,
-    autoApprove,
-    provider,
-    updatedAt: Date.now()
+    ...cfg
   });
 
   pollWithdrawApi();
@@ -990,7 +1109,7 @@ function start(config = {}) {
     pollWithdrawApi();
   }, intervalSec * 1000);
 
-  return { ok: true, active: true, intervalSec, minAmount, maxAmount, autoApprove, provider };
+  return { ok: true, active: true, ...cfg };
 }
 
 function stop() {
@@ -1012,35 +1131,45 @@ function stop() {
 }
 
 function updateConfig(newConfig = {}) {
-  const cfg = _store.get('withdrawConfig', { active: false, intervalSec: 5, minAmount: 0, maxAmount: 5000, autoApprove: false, provider: 'crs' });
+  const cfg = _store.get('withdrawConfig', {});
   const updated = {
     ...cfg,
-    minAmount: Number(newConfig.minAmount) >= 0 ? Number(newConfig.minAmount) : (cfg.minAmount || 0),
-    maxAmount: Number(newConfig.maxAmount) > 0 ? Number(newConfig.maxAmount) : (cfg.maxAmount || 5000),
-    provider: newConfig.provider ? (String(newConfig.provider).toLowerCase().trim() === 'swiftpay' ? 'swiftpay' : 'crs') : (cfg.provider || 'crs'),
+    bankMinAmount: newConfig.bankMinAmount !== undefined ? Number(newConfig.bankMinAmount) : (cfg.bankMinAmount ?? cfg.minAmount ?? 0),
+    bankMaxAmount: newConfig.bankMaxAmount !== undefined ? Number(newConfig.bankMaxAmount) : (cfg.bankMaxAmount ?? cfg.maxAmount ?? 5000),
+    bankProvider: newConfig.bankProvider ? (String(newConfig.bankProvider).toLowerCase().trim() === 'swiftpay' ? 'swiftpay' : 'crs') : (cfg.bankProvider || cfg.provider || 'crs'),
+    walletMinAmount: newConfig.walletMinAmount !== undefined ? Number(newConfig.walletMinAmount) : (cfg.walletMinAmount ?? 0),
+    walletMaxAmount: newConfig.walletMaxAmount !== undefined ? Number(newConfig.walletMaxAmount) : (cfg.walletMaxAmount ?? 5000),
+    walletProvider: newConfig.walletProvider ? (String(newConfig.walletProvider).toLowerCase().trim() === 'swiftpay' ? 'swiftpay' : 'crs') : (cfg.walletProvider || 'crs'),
     updatedAt: Date.now()
   };
+  updated.minAmount = updated.bankMinAmount;
+  updated.maxAmount = updated.bankMaxAmount;
+  updated.provider = updated.bankProvider;
+
   _store.set('withdrawConfig', updated);
   const st = _store.get('withdrawState', {});
   _store.set('withdrawState', {
     ...st,
-    minAmount: updated.minAmount,
-    maxAmount: updated.maxAmount,
-    provider: updated.provider,
-    updatedAt: Date.now()
+    ...updated
   });
   return { ok: true, config: updated };
 }
 
-function setAutoApprove(enabled, options = {}) {
-  const cfg = _store.get('withdrawConfig', { active: false, intervalSec: 5, minAmount: 0, maxAmount: 5000, autoApprove: false, provider: 'crs' });
-  const next = Boolean(enabled);
-  const minAmount = options && Number(options.minAmount) >= 0 ? Number(options.minAmount) : (cfg.minAmount || 0);
-  const maxAmount = options && Number(options.maxAmount) > 0 ? Number(options.maxAmount) : (cfg.maxAmount || 5000);
-  const provider = options && options.provider
-    ? (String(options.provider).toLowerCase().trim() === 'swiftpay' ? 'swiftpay' : 'crs')
-    : (cfg.provider || 'crs');
-  const providerLabel = provider === 'swiftpay' ? 'SwiftPay' : 'CRS';
+function setAutoApprove(arg1, arg2, arg3) {
+  const cfg = _store.get('withdrawConfig', {});
+  let target = 'bank';
+  let next = false;
+  let options = {};
+
+  if (typeof arg1 === 'string' && (arg1 === 'bank' || arg1 === 'wallet')) {
+    target = arg1;
+    next = Boolean(arg2);
+    options = arg3 || {};
+  } else {
+    next = Boolean(arg1);
+    options = arg2 || {};
+    target = options.channel === 'wallet' ? 'wallet' : 'bank';
+  }
 
   if (next) {
     const ledger = getApprovalLedger();
@@ -1061,17 +1190,38 @@ function setAutoApprove(enabled, options = {}) {
     }
   }
 
-  _store.set('withdrawConfig', { ...cfg, minAmount, maxAmount, autoApprove: next, provider, safetyStopped: false, updatedAt: Date.now() });
+  const updated = { ...cfg, safetyStopped: false, updatedAt: Date.now() };
+
+  if (target === 'wallet') {
+    updated.walletAutoApprove = next;
+    if (options.minAmount !== undefined) updated.walletMinAmount = Number(options.minAmount);
+    if (options.maxAmount !== undefined) updated.walletMaxAmount = Number(options.maxAmount);
+    if (options.provider) updated.walletProvider = String(options.provider).toLowerCase().trim() === 'swiftpay' ? 'swiftpay' : 'crs';
+  } else {
+    updated.bankAutoApprove = next;
+    if (options.minAmount !== undefined) updated.bankMinAmount = Number(options.minAmount);
+    if (options.maxAmount !== undefined) updated.bankMaxAmount = Number(options.maxAmount);
+    if (options.provider) updated.bankProvider = String(options.provider).toLowerCase().trim() === 'swiftpay' ? 'swiftpay' : 'crs';
+  }
+
+  updated.autoApprove = Boolean(updated.bankAutoApprove || updated.walletAutoApprove);
+  updated.minAmount = updated.bankMinAmount ?? 0;
+  updated.maxAmount = updated.bankMaxAmount ?? 5000;
+  updated.provider = updated.bankProvider ?? 'crs';
+
+  _store.set('withdrawConfig', updated);
   const st = _store.get('withdrawState', {});
+  const msgTarget = target === 'wallet' ? 'TRUEMONEY Wallet' : 'ธนาคารปกติ';
+  const targetProvider = target === 'wallet' ? updated.walletProvider : updated.bankProvider;
+  const msgProvider = targetProvider === 'swiftpay' ? 'SwiftPay' : 'CRS';
+
   _store.set('withdrawState', {
     ...st,
-    minAmount,
-    maxAmount,
-    autoApprove: next,
-    provider,
-    message: next ? `เปิด Auto Approve (${providerLabel}) แล้ว` : 'ปิด Auto Approve แล้ว'
+    ...updated,
+    message: next ? `เปิด Auto Approve (${msgTarget} ➔ ${msgProvider}) แล้ว` : `ปิด Auto Approve (${msgTarget}) แล้ว`
   });
-  return { ok: true, autoApprove: next, provider };
+
+  return { ok: true, target, autoApprove: next, config: updated };
 }
 
 module.exports = {
@@ -1084,5 +1234,6 @@ module.exports = {
   manualApproveWithdraw,
   manualRejectWithdraw,
   recordBankChange,
-  evaluateWithdrawRisk
+  evaluateWithdrawRisk,
+  isTrueMoneyTransaction
 };
