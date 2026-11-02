@@ -176,6 +176,15 @@ function register({ ipcMain, mainWindow, store, auth, apiEngine, withdrawEngine,
   });
   ipcMain.handle('report-export-monthly-ranking', (_e, savePath, config) => reportEngine.exportMonthlyTopDepositorsWorkbook(savePath, config));
 
+  // 3. รายงานลูกค้าฝากเดือนล่าสุด
+  ipcMain.handle('report-fetch-latest-month-depositors', (_e, config) => reportEngine.fetchLatestMonthDepositors(config));
+  ipcMain.handle('report-cancel-latest-month-depositors', () => {
+    reportEngine.cancelLatestMonthDepositors?.();
+    return true;
+  });
+  ipcMain.handle('report-export-latest-month-depositors', (_e, savePath, config) => reportEngine.exportLatestMonthDepositorsWorkbook(savePath, config));
+  ipcMain.handle('report-get-two-recent-months', (_e, refDate) => reportEngine.getTwoRecentMonths(refDate));
+
   ipcMain.handle('report-open-file', (_e, filePath) => {
     if (filePath) shell.openPath(filePath);
     return true;

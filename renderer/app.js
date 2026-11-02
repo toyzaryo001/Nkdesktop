@@ -3339,6 +3339,423 @@ if (btnExportMonthlyRankingExcel) {
 }
 
 // ==========================================
+// 3. ดึงรายงานลูกค้าฝากเดือนล่าสุด (LATEST MONTH DEPOSITORS)
+// ==========================================
+let latestMonthAllRows = [];
+let latestMonthCurMonth = null;
+let latestMonthPrevMonth = null;
+let latestMonthFilterMode = 'both'; // 'both', 'prev', 'prev_only', 'all'
+let latestMonthTierFilter = 'all'; // 'all', 'vip', 'general', 'new'
+let latestMonthSearchQuery = '';
+
+function initLatestMonthControls() {
+  const selMonthRef = document.getElementById('selLatestMonthRef');
+  if (!selMonthRef) return;
+
+  const now = new Date();
+  const options = [];
+  const THAI_MONTHS = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'];
+
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = `${THAI_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}${i === 0 ? ' (เดือนปัจจุบัน)' : ''}`;
+    options.push({ ym, label });
+  }
+
+  selMonthRef.innerHTML = options.map((opt, idx) =>
+    `<option value="${opt.ym}" ${idx === 0 ? 'selected' : ''}>${opt.label}</option>`
+  ).join('');
+
+  // Mode change
+  const selMode = document.getElementById('selLatestDepositFilterMode');
+  if (selMode) {
+    selMode.addEventListener('change', () => {
+      latestMonthFilterMode = selMode.value;
+      renderLatestMonthView();
+    });
+  }
+
+  // Tier filters
+  const tierContainer = document.getElementById('latestTierFilters');
+  if (tierContainer) {
+    tierContainer.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-latest-tier]');
+      if (!btn) return;
+      tierContainer.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      latestMonthTierFilter = btn.dataset.latestTier || 'all';
+      renderLatestMonthTable();
+    });
+  }
+
+  // Search input
+  const searchInput = document.getElementById('searchLatestMonthTable');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      latestMonthSearchQuery = e.target.value.trim().toLowerCase();
+      renderLatestMonthTable();
+    });
+  }
+
+  // Clear button
+  const btnClear = document.getElementById('btnClearLatestMonthDepositors');
+  if (btnClear) {
+    btnClear.addEventListener('click', () => {
+      latestMonthAllRows = [];
+      const container = document.getElementById('containerLatestMonthResults');
+      if (container) container.style.display = 'none';
+      const progressBox = document.getElementById('latestMonthProgressBarContainer');
+      if (progressBox) progressBox.style.display = 'none';
+      const statusEl = document.getElementById('statusLatestMonth');
+      if (statusEl) statusEl.textContent = '';
+      const searchEl = document.getElementById('searchLatestMonthTable');
+      if (searchEl) searchEl.value = '';
+      latestMonthSearchQuery = '';
+      latestMonthTierFilter = 'all';
+      tierContainer?.querySelectorAll('button').forEach((b, idx) => {
+        b.classList.toggle('active', idx === 0);
+      });
+    });
+  }
+}
+
+// Progress listener
+if (window.nkAPI && window.nkAPI.onLatestMonthDepositorsProgress) {
+  window.nkAPI.onLatestMonthDepositorsProgress((data) => {
+    const box = document.getElementById('latestMonthProgressBarContainer');
+    const bar = document.getElementById('latestMonthProgressBarFill');
+    const pct = document.getElementById('latestMonthProgressPercent');
+    const txt = document.getElementById('latestMonthProgressText');
+    if (box && box.style.display === 'none') box.style.display = 'block';
+    if (bar && data.percent !== undefined) bar.style.width = `${Math.min(100, Math.max(0, data.percent))}%`;
+    if (pct && data.percent !== undefined) pct.textContent = `${data.percent}%`;
+    if (txt && data.message) txt.textContent = data.message;
+  });
+}
+
+// Fetch Latest Month Depositors Click
+const btnFetchLatestMonth = document.getElementById('btnFetchLatestMonthDepositors');
+const btnCancelLatestMonth = document.getElementById('btnCancelLatestMonth');
+
+if (btnFetchLatestMonth) {
+  btnFetchLatestMonth.addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusLatestMonth');
+    const container = document.getElementById('containerLatestMonthResults');
+    const progressBox = document.getElementById('latestMonthProgressBarContainer');
+    const progressBar = document.getElementById('latestMonthProgressBarFill');
+    const progressText = document.getElementById('latestMonthProgressText');
+    const progressPct = document.getElementById('latestMonthProgressPercent');
+    const selMonthRef = document.getElementById('selLatestMonthRef');
+    const selMode = document.getElementById('selLatestDepositFilterMode');
+
+    if (progressBox) progressBox.style.display = 'block';
+    if (progressBar) progressBar.style.width = '0%';
+    if (progressPct) progressPct.textContent = '0%';
+    if (progressText) progressText.textContent = '⏳ กำลังเตรียมเชื่อมต่อข้อมูลประวัติการฝากเงิน...';
+    if (btnCancelLatestMonth) {
+      btnCancelLatestMonth.disabled = false;
+      btnCancelLatestMonth.textContent = '⏹️ หยุดดึงข้อมูล (แสดงเท่าที่ได้)';
+    }
+
+    if (statusEl) statusEl.textContent = '⏳ กำลังดึงประวัติการฝากเงิน 2 เดือนและข้อมูลสมาชิกทั้งหมด...';
+    btnFetchLatestMonth.disabled = true;
+
+    try {
+      const yearMonth = selMonthRef ? selMonthRef.value : undefined;
+      const filterMode = selMode ? selMode.value : 'both';
+      latestMonthFilterMode = filterMode;
+
+      const res = await window.nkAPI.fetchLatestMonthDepositors({
+        yearMonth,
+        filterMode
+      });
+
+      if (res && res.ok) {
+        latestMonthAllRows = res.rows || [];
+        latestMonthCurMonth = res.curMonth;
+        latestMonthPrevMonth = res.prevMonth;
+
+        // Update table column headers
+        const thPrev = document.getElementById('thColPrevMonth');
+        const thCur = document.getElementById('thColCurMonth');
+        if (thPrev && res.prevMonth) {
+          thPrev.textContent = `ยอดฝาก (${res.prevMonth.shortLabel})`;
+        }
+        if (thCur && res.curMonth) {
+          thCur.textContent = `ยอดฝาก (${res.curMonth.shortLabel})`;
+        }
+
+        renderLatestMonthView();
+
+        if (container) container.style.display = 'block';
+        if (statusEl) {
+          const bothCount = latestMonthAllRows.filter((r) => r.hasBothMonths).length;
+          const prevCount = latestMonthAllRows.filter((r) => r.hasPrevDeposit).length;
+          statusEl.textContent = `✅ ดึงข้อมูลสำเร็จ! รวมผู้ที่มียอดฝากล่าสุด ${latestMonthAllRows.length.toLocaleString('th-TH')} คน (ฝากทั้ง 2 เดือน: ${bothCount.toLocaleString('th-TH')} คน, ฝากเดือนที่แล้ว: ${prevCount.toLocaleString('th-TH')} คน)`;
+        }
+
+        showToast({
+          type: 'success',
+          badge: 'รายงานลูกค้า',
+          title: 'ดึงรายงานลูกค้าฝากล่าสุดสำเร็จ!',
+          detail: `ประมวลผลสมาชิกเรียบร้อย พบผู้มียอดฝากรวม ${latestMonthAllRows.length.toLocaleString('th-TH')} คน`,
+          badgeColor: '#10b981'
+        });
+      }
+    } catch (err) {
+      if (statusEl) statusEl.textContent = '❌ ล้มเหลว: ' + (err?.message || err);
+      showToast({
+        type: 'error',
+        badge: 'Error',
+        title: 'ดึงรายงานไม่สำเร็จ',
+        detail: err?.message || String(err),
+        badgeColor: '#ef4444'
+      });
+    } finally {
+      if (progressBox) progressBox.style.display = 'none';
+      btnFetchLatestMonth.disabled = false;
+      if (btnCancelLatestMonth) {
+        btnCancelLatestMonth.disabled = false;
+        btnCancelLatestMonth.textContent = '⏹️ หยุดดึงข้อมูล (แสดงเท่าที่ได้)';
+      }
+    }
+  });
+}
+
+if (btnCancelLatestMonth) {
+  btnCancelLatestMonth.addEventListener('click', async () => {
+    btnCancelLatestMonth.disabled = true;
+    btnCancelLatestMonth.textContent = '⏳ กำลังหยุด...';
+    try {
+      await window.nkAPI.cancelLatestMonthDepositors();
+    } catch (e) {}
+  });
+}
+
+function renderLatestMonthView() {
+  // 1. Filter rows by active filter mode
+  let filteredRows = [];
+  if (latestMonthFilterMode === 'both') {
+    // "ถ้าเลือก 2 เดือน ดึงเฉพาะ คนที่มียอดฝากทั้ง 2 เดือนเท่านั้น ไม่เอาแบบ เดือนนี้มี เดือนก่อนไม่มี"
+    filteredRows = latestMonthAllRows.filter((r) => r.hasBothMonths);
+  } else if (latestMonthFilterMode === 'prev') {
+    filteredRows = latestMonthAllRows.filter((r) => r.hasPrevDeposit);
+  } else if (latestMonthFilterMode === 'prev_only') {
+    filteredRows = latestMonthAllRows.filter((r) => r.hasPrevDeposit && !r.hasCurDeposit);
+  } else {
+    filteredRows = [...latestMonthAllRows];
+  }
+
+  // 2. Compute stats for filtered set
+  const vipList = filteredRows.filter((r) => r.tierKey === 'vip');
+  const genList = filteredRows.filter((r) => r.tierKey === 'general');
+  const newList = filteredRows.filter((r) => r.tierKey === 'new');
+
+  const vipTot = vipList.reduce((s, r) => s + r.recentTotalDeposit, 0);
+  const genTot = genList.reduce((s, r) => s + r.recentTotalDeposit, 0);
+  const newTot = newList.reduce((s, r) => s + r.recentTotalDeposit, 0);
+  const grandTot = filteredRows.reduce((s, r) => s + r.recentTotalDeposit, 0);
+  const sumPrev = filteredRows.reduce((s, r) => s + r.prevMonthDeposit, 0);
+  const sumCur = filteredRows.reduce((s, r) => s + r.curMonthDeposit, 0);
+
+  // Update Stat Cards
+  const elVipAmt = document.getElementById('statLatestVipAmount');
+  const elVipCnt = document.getElementById('statLatestVipCount');
+  const elGenAmt = document.getElementById('statLatestGeneralAmount');
+  const elGenCnt = document.getElementById('statLatestGeneralCount');
+  const elNewAmt = document.getElementById('statLatestNewAmount');
+  const elNewCnt = document.getElementById('statLatestNewCount');
+  const elTotAmt = document.getElementById('statLatestTotalAmount');
+  const elTotCnt = document.getElementById('statLatestTotalCount');
+  const elTotTitle = document.getElementById('statLatestTotalTitle');
+
+  if (elVipAmt) elVipAmt.textContent = '฿' + vipTot.toLocaleString('th-TH', { minimumFractionDigits: 2 });
+  if (elVipCnt) elVipCnt.textContent = `${vipList.length.toLocaleString('th-TH')} คน`;
+
+  if (elGenAmt) elGenAmt.textContent = '฿' + genTot.toLocaleString('th-TH', { minimumFractionDigits: 2 });
+  if (elGenCnt) elGenCnt.textContent = `${genList.length.toLocaleString('th-TH')} คน`;
+
+  if (elNewAmt) elNewAmt.textContent = '฿' + newTot.toLocaleString('th-TH', { minimumFractionDigits: 2 });
+  if (elNewCnt) elNewCnt.textContent = `${newList.length.toLocaleString('th-TH')} คน`;
+
+  if (elTotAmt) elTotAmt.textContent = '฿' + grandTot.toLocaleString('th-TH', { minimumFractionDigits: 2 });
+  if (elTotCnt) {
+    const prevL = latestMonthPrevMonth?.shortLabel || 'ด.ก่อน';
+    const curL = latestMonthCurMonth?.shortLabel || 'ด.นี้';
+    elTotCnt.textContent = `${filteredRows.length.toLocaleString('th-TH')} คน (${prevL}: ฿${sumPrev.toLocaleString('th-TH', { maximumFractionDigits: 0 })}, ${curL}: ฿${sumCur.toLocaleString('th-TH', { maximumFractionDigits: 0 })})`;
+  }
+
+  if (elTotTitle) {
+    if (latestMonthFilterMode === 'both') {
+      elTotTitle.textContent = '🌟 สรุปยอด (ฝากทั้ง 2 เดือน)';
+    } else if (latestMonthFilterMode === 'prev') {
+      elTotTitle.textContent = '📌 สรุปยอด (ฝากเดือนที่แล้ว)';
+    } else {
+      elTotTitle.textContent = '👥 สรุปยอดผู้ผ่านเงื่อนไข';
+    }
+  }
+
+  // Update Tab Count Badges
+  const tabAll = document.getElementById('countLatestTabAll');
+  const tabVip = document.getElementById('countLatestTabVip');
+  const tabGen = document.getElementById('countLatestTabGeneral');
+  const tabNew = document.getElementById('countLatestTabNew');
+  if (tabAll) tabAll.textContent = filteredRows.length.toLocaleString('th-TH');
+  if (tabVip) tabVip.textContent = vipList.length.toLocaleString('th-TH');
+  if (tabGen) tabGen.textContent = genList.length.toLocaleString('th-TH');
+  if (tabNew) tabNew.textContent = newList.length.toLocaleString('th-TH');
+
+  // Render Table
+  renderLatestMonthTable();
+}
+
+function renderLatestMonthTable() {
+  const tbody = document.getElementById('latestMonthTableBody');
+  const infoEl = document.getElementById('latestMonthTableInfo');
+  if (!tbody) return;
+
+  // 1. Mode filter
+  let list = [];
+  if (latestMonthFilterMode === 'both') {
+    list = latestMonthAllRows.filter((r) => r.hasBothMonths);
+  } else if (latestMonthFilterMode === 'prev') {
+    list = latestMonthAllRows.filter((r) => r.hasPrevDeposit);
+  } else if (latestMonthFilterMode === 'prev_only') {
+    list = latestMonthAllRows.filter((r) => r.hasPrevDeposit && !r.hasCurDeposit);
+  } else {
+    list = [...latestMonthAllRows];
+  }
+
+  // 2. Tier filter
+  if (latestMonthTierFilter !== 'all') {
+    list = list.filter((r) => r.tierKey === latestMonthTierFilter);
+  }
+
+  // 3. Search filter
+  if (latestMonthSearchQuery) {
+    const q = latestMonthSearchQuery;
+    list = list.filter((r) =>
+      r.username.toLowerCase().includes(q) ||
+      (r.name && r.name.toLowerCase().includes(q)) ||
+      (r.phone && r.phone.replace(/[^0-9]/g, '').includes(q))
+    );
+  }
+
+  if (infoEl) {
+    infoEl.textContent = `แสดง ${list.length.toLocaleString('th-TH')} รายการ (จากทั้งหมด ${latestMonthAllRows.length.toLocaleString('th-TH')} คน)`;
+  }
+
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="11" class="empty-state" style="text-align:center; padding:30px; color:var(--text-dim);">ไม่พบข้อมูลสมาชิกตามเงื่อนไขที่เลือก</td></tr>';
+    return;
+  }
+
+  const renderLimit = 150;
+  const displayRows = list.slice(0, renderLimit);
+
+  tbody.innerHTML = displayRows.map((m, idx) => {
+    let tierBadge = '';
+    if (m.tierKey === 'vip') {
+      tierBadge = '<span style="background:rgba(217,119,6,0.18); color:#f59e0b; border:1px solid rgba(217,119,6,0.35); padding:2px 8px; border-radius:6px; font-weight:700; font-size:11px;">🥇 VIP</span>';
+    } else if (m.tierKey === 'general') {
+      tierBadge = '<span style="background:rgba(37,99,235,0.18); color:#38bdf8; border:1px solid rgba(37,99,235,0.35); padding:2px 8px; border-radius:6px; font-weight:600; font-size:11px;">🥈 ทั่วไป</span>';
+    } else {
+      tierBadge = '<span style="background:rgba(16,185,129,0.18); color:#10b981; border:1px solid rgba(16,185,129,0.35); padding:2px 8px; border-radius:6px; font-weight:600; font-size:11px;">🥉 ใหม่</span>';
+    }
+
+    let statusBadge = '';
+    if (m.hasBothMonths) {
+      statusBadge = '<span style="background:rgba(16,185,129,0.15); color:#10b981; border:1px solid rgba(16,185,129,0.35); padding:2px 8px; border-radius:12px; font-size:11px; font-weight:700;">🌟 ฝากทั้ง 2 เดือน</span>';
+    } else if (m.hasPrevDeposit) {
+      statusBadge = '<span style="background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid rgba(56,189,248,0.35); padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600;">📌 ฝากเดือนที่แล้ว</span>';
+    } else {
+      statusBadge = '<span style="background:rgba(245,158,11,0.15); color:#f59e0b; border:1px solid rgba(245,158,11,0.35); padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600;">⚡ ฝากเฉพาะเดือนนี้</span>';
+    }
+
+    return `
+      <tr style="border-bottom:1px solid var(--border-subtle); height:38px;">
+        <td style="padding:8px 8px; text-align:center; color:var(--text-dim); font-size:11px;">${idx + 1}</td>
+        <td style="padding:8px 10px; text-align:center; font-weight:700; color:var(--accent); font-family:monospace;">${m.username}</td>
+        <td style="padding:8px 10px; text-align:left; color:var(--text);">${m.name || '-'}</td>
+        <td style="padding:8px 10px; text-align:center; color:var(--text-muted); font-family:monospace;">${m.phone || '-'}</td>
+        <td style="padding:8px 10px; text-align:center;">${tierBadge}</td>
+        <td style="padding:8px 10px; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:${m.prevMonthDeposit > 0 ? 'var(--text)' : 'var(--text-dim)'};">฿${(m.prevMonthDeposit || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+        <td style="padding:8px 10px; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:${m.curMonthDeposit > 0 ? '#10b981' : 'var(--text-dim)'};">฿${(m.curMonthDeposit || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+        <td style="padding:8px 10px; text-align:right; font-variant-numeric:tabular-nums; font-weight:700; color:#f59e0b;">฿${(m.recentTotalDeposit || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+        <td style="padding:8px 10px; text-align:center;">${statusBadge}</td>
+        <td style="padding:8px 10px; text-align:center; font-size:11px; color:var(--text-dim);">${m.lastDepositAt || '-'}</td>
+        <td style="padding:8px 10px; text-align:center; font-size:11px; color:var(--text-dim);">${m.registeredAt || '-'}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// Export Latest Month Depositors to Excel
+const btnExportLatestMonthExcel = document.getElementById('btnExportLatestMonthExcel');
+if (btnExportLatestMonthExcel) {
+  btnExportLatestMonthExcel.addEventListener('click', async () => {
+    if (!latestMonthAllRows || !latestMonthAllRows.length) {
+      showToast({
+        type: 'warning',
+        badge: 'Excel',
+        title: 'ไม่มีข้อมูลสำหรับส่งออก',
+        detail: 'กรุณากดดึงรายงานลูกค้าฝากล่าสุดก่อนทำการส่งออกไฟล์',
+        badgeColor: '#f59e0b'
+      });
+      return;
+    }
+
+    const pad2 = (n) => String(n).padStart(2, '0');
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
+    const modeLabel = latestMonthFilterMode === 'both' ? 'ฝากทั้ง2เดือน' : (latestMonthFilterMode === 'prev' ? 'ฝากเดือนที่แล้ว' : 'ฝากล่าสุด');
+    const defaultFilename = `NK_รายงานลูกค้าฝากล่าสุด_${modeLabel}_${dateStr}.xlsx`;
+
+    const savePath = await window.nkAPI.selectSavePath(defaultFilename);
+    if (!savePath) return;
+
+    const origHtml = btnExportLatestMonthExcel.innerHTML;
+    btnExportLatestMonthExcel.disabled = true;
+    btnExportLatestMonthExcel.innerHTML = '<span>⏳</span><span>กำลังสร้างไฟล์ Excel...</span>';
+
+    try {
+      const res = await window.nkAPI.exportLatestMonthDepositorsExcel(savePath, {
+        filterMode: latestMonthFilterMode
+      });
+
+      if (res && res.ok) {
+        showToast({
+          type: 'success',
+          badge: 'Excel',
+          title: '📥 ส่งออกรายงานสำเร็จ!',
+          detail: `บันทึกไฟล์เรียบร้อยที่: ${res.filePath}`,
+          badgeColor: '#10b981'
+        });
+      }
+    } catch (err) {
+      showToast({
+        type: 'error',
+        badge: 'Excel',
+        title: '❌ ส่งออกไฟล์ไม่สำเร็จ',
+        detail: err?.message || String(err),
+        badgeColor: '#ef4444'
+      });
+    } finally {
+      btnExportLatestMonthExcel.disabled = false;
+      btnExportLatestMonthExcel.innerHTML = origHtml;
+    }
+  });
+}
+
+// Initialize on load
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initLatestMonthControls);
+} else {
+  initLatestMonthControls();
+}
+
+// ==========================================
 // 6.5 CUSTOMER RETENTION & COHORT SEGMENTATION
 // ==========================================
 let cohortAllRows = [];

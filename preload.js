@@ -77,6 +77,15 @@ contextBridge.exposeInMainWorld('nkAPI', {
     ipcRenderer.on('monthly-ranking-progress', (_event, data) => callback(data));
   },
   exportMonthlyRanking: (savePath, config) => ipcRenderer.invoke('report-export-monthly-ranking', savePath, config),
+
+  // 3. รายงานลูกค้าฝากเดือนล่าสุด
+  fetchLatestMonthDepositors: (config) => ipcRenderer.invoke('report-fetch-latest-month-depositors', config),
+  cancelLatestMonthDepositors: () => ipcRenderer.invoke('report-cancel-latest-month-depositors'),
+  onLatestMonthDepositorsProgress: (callback) => {
+    ipcRenderer.on('latest-month-depositors-progress', (_event, data) => callback(data));
+  },
+  exportLatestMonthDepositorsExcel: (savePath, config) => ipcRenderer.invoke('report-export-latest-month-depositors', savePath, config),
+  getTwoRecentMonths: (refDate) => ipcRenderer.invoke('report-get-two-recent-months', refDate),
   openFile: (filePath) => ipcRenderer.invoke('report-open-file', filePath),
 
   // Analyzer

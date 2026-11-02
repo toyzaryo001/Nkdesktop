@@ -2184,6 +2184,802 @@ async function exportMonthlyTopDepositorsWorkbook(savePath = null, config = null
   return { ok: true, filePath: outputPath, rowCount: members.length, summary: cachedMonthlyRankingData.summary };
 }
 
+// ====================================================
+// 3. ดึงรายงานลูกค้าฝากเดือนล่าสุด (Latest Month Depositors Engine)
+// วิเคราะห์ยูสเซอร์ทั้งหมด แยกกลุ่ม VIP/ทั่วไป/ใหม่
+// กรองเฉพาะฝากล่าสุดเดือนที่แล้ว หรือฝากต่อเนื่อง 2 เดือน (เดือนที่แล้ว + เดือนนี้)
+// ====================================================
+let isLatestMonthCancelled = false;
+let cachedLatestMonthData = {
+  config: null,
+  rows: [],
+  summary: null,
+  curMonth: null,
+  prevMonth: null,
+  fetchedAt: null
+};
+
+function cancelLatestMonthDepositors() {
+  isLatestMonthCancelled = true;
+}
+
+function sendLatestMonthProgress(data) {
+  try {
+    const windows = BrowserWindow.getAllWindows();
+    windows.forEach((win) => {
+      if (!win.isDestroyed()) {
+        win.webContents.send('latest-month-depositors-progress', data);
+      }
+    });
+  } catch (e) {}
+}
+
+function getCohortCachePath() {
+  try {
+    const { app } = require('electron');
+    return path.join(app.getPath('userData'), 'nk-cohort-cache.json');
+  } catch (e) {
+    return path.join(os.homedir(), '.nk-cohort-cache.json');
+  }
+}
+
+function loadSharedCohortCache() {
+  try {
+    const p = getCohortCachePath();
+    if (fs.existsSync(p)) {
+      return JSON.parse(fs.readFileSync(p, 'utf8')) || {};
+    }
+  } catch (e) {}
+  return { months: {} };
+}
+
+function saveSharedCohortCache(cache) {
+  try {
+    const p = getCohortCachePath();
+    const dir = path.dirname(p);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(p, JSON.stringify(cache, null, 2), 'utf8');
+  } catch (e) {}
+}
+
+function getTwoRecentMonths(refDate = new Date()) {
+  let now = refDate;
+  if (typeof refDate === 'string' && refDate) {
+    if (/^\d{4}-\d{2}$/.test(refDate)) {
+      const [y, m] = refDate.split('-').map(Number);
+      now = new Date(y, m - 1, 15);
+    } else {
+      now = new Date(refDate);
+    }
+  }
+  const bkk = apiEngine.getBangkokDateParts
+    ? apiEngine.getBangkokDateParts(now)
+    : {
+        year: String(now.getFullYear()),
+        month: pad(now.getMonth() + 1),
+        day: pad(now.getDate())
+      };
+
+  const curY = Number(bkk.year);
+  const curM = Number(bkk.month);
+
+  const curKey = `${curY}-${pad(curM)}`;
+  const curStartDate = `${curKey}-01`;
+  const daysInCurM = new Date(curY, curM, 0).getDate();
+  const curEndDate = `${curKey}-${pad(daysInCurM)}`;
+
+  let prevM = curM - 1;
+  let prevY = curY;
+  if (prevM <= 0) {
+    prevM = 12;
+    prevY -= 1;
+  }
+  const prevKey = `${prevY}-${pad(prevM)}`;
+  const daysInPrevM = new Date(prevY, prevM, 0).getDate();
+  const prevStartDate = `${prevKey}-01`;
+  const prevEndDate = `${prevKey}-${pad(daysInPrevM)}`;
+
+  const THAI_MONTHS = ['', 'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+
+  return {
+    curMonth: {
+      key: curKey,
+      year: curY,
+      month: curM,
+      startDate: curStartDate,
+      endDate: curEndDate,
+      shortLabel: `${THAI_MONTHS[curM]} ${curY + 543}`,
+      fullLabel: `เดือนนี้ (${THAI_MONTHS[curM]} ${curY + 543})`
+    },
+    prevMonth: {
+      key: prevKey,
+      year: prevY,
+      month: prevM,
+      startDate: prevStartDate,
+      endDate: prevEndDate,
+      shortLabel: `${THAI_MONTHS[prevM]} ${prevY + 543}`,
+      fullLabel: `เดือนที่แล้ว (${THAI_MONTHS[prevM]} ${prevY + 543})`
+    }
+  };
+}
+
+async function fetchMonthDepositMap(monthKey, startDate, endDate, monthLabel, onProgressStep) {
+  const userAgg = {};
+  const context = await apiEngine.getApiBusinessContext();
+  const pageSize = 200;
+
+  const first = await apiEngine.apiFetchJson('/transactions', {
+    type: 'deposit',
+    page: 1,
+    limit: pageSize,
+    start_date: startDate,
+    end_date: endDate,
+    process_type: 'all',
+    sort: 'transaction_at',
+    order: 'desc',
+    website_id: context.websiteId,
+    website_agent_id: context.agentId || undefined
+  });
+
+  const firstData = apiEngine.apiDataArray(first);
+  const pagination = apiEngine.apiPagination(first, 1, pageSize, firstData.length);
+  let totalPages = pagination.totalPages || (firstData.length < pageSize ? 1 : 0);
+
+  function processBatch(txs) {
+    for (const tx of txs) {
+      const cat = String(tx?.category || '').toLowerCase();
+      const dir = String(tx?.direction || '').toLowerCase();
+      const isDeposit = cat === 'deposit' || dir === 'in' || tx.type === 'deposit';
+      if (!isDeposit) continue;
+
+      const st = String(tx?.status || '').toLowerCase();
+      if (['rejected', 'cancel', 'failed'].includes(st)) continue;
+
+      const amt = Number(tx?.amount);
+      if (isNaN(amt) || amt <= 0) continue;
+
+      const username = String(tx.game_username || tx.member?.game_username || tx.username || '').trim();
+      if (!username || username === '-') continue;
+
+      if (!userAgg[username]) {
+        userAgg[username] = {
+          username,
+          totalDeposit: 0,
+          depositCount: 0,
+          lastDepositAt: ''
+        };
+      }
+      userAgg[username].totalDeposit += amt;
+      userAgg[username].depositCount += 1;
+
+      const dtStr = tx.transaction_at || tx.created_at || tx.action_at || tx.date || '';
+      if (dtStr && (!userAgg[username].lastDepositAt || dtStr > userAgg[username].lastDepositAt)) {
+        userAgg[username].lastDepositAt = dtStr;
+      }
+    }
+  }
+
+  processBatch(firstData);
+
+  if (onProgressStep) {
+    onProgressStep(1, Math.max(1, totalPages));
+  }
+
+  if (totalPages > 1) {
+    const pages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
+    const concurrency = 10;
+    let cursor = 0;
+    let completed = 1;
+
+    const worker = async () => {
+      while (cursor < pages.length) {
+        if (isLatestMonthCancelled) break;
+        const page = pages[cursor++];
+        try {
+          const payload = await apiEngine.apiFetchJson('/transactions', {
+            type: 'deposit',
+            page,
+            limit: pageSize,
+            start_date: startDate,
+            end_date: endDate,
+            process_type: 'all',
+            sort: 'transaction_at',
+            order: 'desc',
+            website_id: context.websiteId,
+            website_agent_id: context.agentId || undefined
+          });
+          processBatch(apiEngine.apiDataArray(payload));
+        } catch (err) {
+          console.warn(`[LatestMonth] Error page ${page} of ${monthKey}:`, err?.message);
+        } finally {
+          completed++;
+          if (onProgressStep) {
+            onProgressStep(completed, totalPages);
+          }
+        }
+      }
+    };
+
+    const workers = Array.from({ length: Math.min(concurrency, pages.length) }, () => worker());
+    await Promise.all(workers);
+  }
+
+  return userAgg;
+}
+
+async function fetchLatestMonthDepositors(config = {}) {
+  isLatestMonthCancelled = false;
+
+  const vipMin = Number(config.vipMin) || 1000000;
+  const generalMin = Number(config.generalMin) || 100000;
+  const forceRefresh = Boolean(config.forceRefresh);
+
+  const months = getTwoRecentMonths(config.yearMonth || config.refDate);
+  const { curMonth, prevMonth } = months;
+
+  const startedAt = Date.now();
+  const startMsg = `กำลังเตรียมข้อมูลวิเคราะห์ลูกค้าฝากล่าสุด (${prevMonth.shortLabel} และ ${curMonth.shortLabel})...`;
+
+  sendLatestMonthProgress({
+    status: 'running',
+    step: 1,
+    totalSteps: 3,
+    percent: 0,
+    message: startMsg
+  });
+
+  try {
+    const context = await apiEngine.getApiBusinessContext();
+
+    // 1. Fetch Previous Month Deposits (check shared cohort cache first)
+    const cache = loadSharedCohortCache();
+    if (!cache.months) cache.months = {};
+    let prevAgg = null;
+
+    if (!forceRefresh && cache.months[prevMonth.key] && cache.months[prevMonth.key].isComplete && cache.months[prevMonth.key].userAgg) {
+      prevAgg = cache.months[prevMonth.key].userAgg;
+      sendLatestMonthProgress({
+        status: 'running',
+        step: 1,
+        totalSteps: 3,
+        percent: 30,
+        message: `⚡ โหลดข้อมูลฝาก ${prevMonth.fullLabel} จาก Cache สำเร็จ (${Object.keys(prevAgg).length.toLocaleString('th-TH')} ยูสเซอร์)`
+      });
+    } else {
+      sendLatestMonthProgress({
+        status: 'running',
+        step: 1,
+        totalSteps: 3,
+        percent: 5,
+        message: `⏳ กำลังดึงประวัติการฝากเงิน ${prevMonth.fullLabel}...`
+      });
+
+      prevAgg = await fetchMonthDepositMap(
+        prevMonth.key,
+        prevMonth.startDate,
+        prevMonth.endDate,
+        prevMonth.fullLabel,
+        (cur, tot) => {
+          const p = Math.round((cur / tot) * 30);
+          sendLatestMonthProgress({
+            status: 'running',
+            step: 1,
+            totalSteps: 3,
+            percent: Math.min(30, Math.max(5, p)),
+            message: `กำลังดึง ${prevMonth.fullLabel} · หน้า ${cur}/${tot} (${Math.round((cur / tot) * 100)}%)`
+          });
+        }
+      );
+
+      // Save to cache
+      cache.months[prevMonth.key] = {
+        isComplete: true,
+        userAgg: prevAgg,
+        totalUsers: Object.keys(prevAgg).length,
+        updatedAt: Date.now()
+      };
+      saveSharedCohortCache(cache);
+    }
+
+    if (isLatestMonthCancelled) {
+      return { ok: false, isCancelled: true, message: 'ยกเลิกการดึงข้อมูลแล้ว' };
+    }
+
+    // 2. Fetch Current Month Deposits (fresh live transactions)
+    sendLatestMonthProgress({
+      status: 'running',
+      step: 2,
+      totalSteps: 3,
+      percent: 35,
+      message: `⏳ กำลังดึงประวัติการฝากเงิน ${curMonth.fullLabel}...`
+    });
+
+    const curAgg = await fetchMonthDepositMap(
+      curMonth.key,
+      curMonth.startDate,
+      curMonth.endDate,
+      curMonth.fullLabel,
+      (cur, tot) => {
+        const p = 35 + Math.round((cur / tot) * 30);
+        sendLatestMonthProgress({
+          status: 'running',
+          step: 2,
+          totalSteps: 3,
+          percent: Math.min(65, Math.max(35, p)),
+          message: `กำลังดึง ${curMonth.fullLabel} · หน้า ${cur}/${tot} (${Math.round((cur / tot) * 100)}%)`
+        });
+      }
+    );
+
+    if (isLatestMonthCancelled) {
+      return { ok: false, isCancelled: true, message: 'ยกเลิกการดึงข้อมูลแล้ว' };
+    }
+
+    // 3. Fetch All Members from /members
+    sendLatestMonthProgress({
+      status: 'running',
+      step: 3,
+      totalSteps: 3,
+      percent: 70,
+      message: '⏳ กำลังดึงข้อมูลสมาชิกทั้งหมด เพื่อจัดกลุ่มลูกค้า (VIP / ทั่วไป / ใหม่)...'
+    });
+
+    const pageSize = 200;
+    const firstMembersPayload = await apiEngine.apiFetchJson('/members', {
+      page: 1,
+      limit: pageSize,
+      website_id: context.websiteId,
+      website_agent_id: context.agentId || undefined
+    });
+
+    const firstMembersRaw = apiEngine.apiDataArray(firstMembersPayload);
+    const memPaging = apiEngine.apiPagination(firstMembersPayload, 1, pageSize, firstMembersRaw.length);
+    let memTotalPages = memPaging.totalPages || (firstMembersRaw.length < pageSize ? 1 : 0);
+    const allMembersRaw = [...firstMembersRaw];
+
+    if (memTotalPages > 1) {
+      const pages = Array.from({ length: memTotalPages - 1 }, (_, i) => i + 2);
+      const concurrency = 10;
+      let cursor = 0;
+      let memCompleted = 1;
+
+      const memWorker = async () => {
+        while (cursor < pages.length) {
+          if (isLatestMonthCancelled) break;
+          const p = pages[cursor++];
+          try {
+            const pagePayload = await apiEngine.apiFetchJson('/members', {
+              page: p,
+              limit: pageSize,
+              website_id: context.websiteId,
+              website_agent_id: context.agentId || undefined
+            });
+            allMembersRaw.push(...apiEngine.apiDataArray(pagePayload));
+          } catch (fetchErr) {
+            console.warn(`[LatestMonth] Warning members page ${p}:`, fetchErr?.message);
+          } finally {
+            memCompleted++;
+            const pct = 70 + Math.round((memCompleted / memTotalPages) * 25);
+            sendLatestMonthProgress({
+              status: 'running',
+              step: 3,
+              totalSteps: 3,
+              percent: Math.min(95, pct),
+              message: `ดึงข้อมูลสมาชิก · หน้า ${memCompleted}/${memTotalPages} (${allMembersRaw.length.toLocaleString('th-TH')} ยูสเซอร์)`
+            });
+          }
+        }
+      };
+
+      await Promise.all(Array.from({ length: Math.min(concurrency, pages.length) }, () => memWorker()));
+    }
+
+    // 4. Map and Merge Data
+    const memberMap = new Map();
+    for (const mem of allMembersRaw) {
+      const username = String(mem.game_username || mem.username || '').trim();
+      if (!username || username === '-' || memberMap.has(username)) continue;
+
+      const lifetimeDeposit = extractMemberDeposit(mem);
+      const regDateRaw = mem.created_at || mem.registered_at || mem.register_at || '';
+      const onlineRaw = mem.last_login || mem.last_online || mem.online_at || mem.updated_at || '';
+      const code = String(mem.bankcode || mem.bank_code || '').toUpperCase();
+      const acct = mem.banknumber || mem.bank_number || '';
+
+      memberMap.set(username, {
+        username,
+        name: mem.fullname || mem.name || [mem.first_name, mem.last_name].filter(Boolean).join(' ') || '-',
+        phone: apiEngine.apiDisplayPhone(mem.phone || mem.line || '') || '-',
+        bank: (apiEngine.apiBankName(code) || code || '-') + (acct ? ` (${acct})` : ''),
+        lifetimeDeposit,
+        registeredAt: formatDateDisplay(regDateRaw),
+        lastOnline: formatDateTimeDisplay(onlineRaw)
+      });
+    }
+
+    // Ensure all users who deposited exist in map
+    const allDepositUsers = new Set([...Object.keys(prevAgg), ...Object.keys(curAgg)]);
+    for (const uname of allDepositUsers) {
+      if (!memberMap.has(uname)) {
+        memberMap.set(uname, {
+          username: uname,
+          name: '-',
+          phone: '-',
+          bank: '-',
+          lifetimeDeposit: (prevAgg[uname]?.totalDeposit || 0) + (curAgg[uname]?.totalDeposit || 0),
+          registeredAt: '-',
+          lastOnline: '-'
+        });
+      }
+    }
+
+    // 5. Build final list of depositors
+    const rows = [];
+    for (const [username, mem] of memberMap.entries()) {
+      const prevData = prevAgg[username];
+      const curData = curAgg[username];
+
+      const prevMonthDeposit = prevData ? prevData.totalDeposit : 0;
+      const prevMonthCount = prevData ? prevData.depositCount : 0;
+      const curMonthDeposit = curData ? curData.totalDeposit : 0;
+      const curMonthCount = curData ? curData.depositCount : 0;
+
+      const hasPrev = prevMonthDeposit > 0;
+      const hasCur = curMonthDeposit > 0;
+      const hasBoth = hasPrev && hasCur;
+
+      // Only include users who deposited in at least one of these two months
+      if (!hasPrev && !hasCur) continue;
+
+      let lastDepAt = curData?.lastDepositAt || prevData?.lastDepositAt || '';
+      if (lastDepAt) {
+        lastDepAt = formatDateTimeDisplay(lastDepAt);
+      }
+
+      let depositStatus = 'ฝากทั้ง 2 เดือน';
+      let depositStatusKey = 'both';
+      if (hasBoth) {
+        depositStatus = 'ฝากทั้ง 2 เดือน';
+        depositStatusKey = 'both';
+      } else if (hasPrev && !hasCur) {
+        depositStatus = 'ฝากเดือนที่แล้วเท่านั้น';
+        depositStatusKey = 'prev_only';
+      } else if (!hasPrev && hasCur) {
+        depositStatus = 'ฝากเฉพาะเดือนนี้';
+        depositStatusKey = 'cur_only';
+      }
+
+      const totalRecent = prevMonthDeposit + curMonthDeposit;
+      const depositForTier = Math.max(mem.lifetimeDeposit, totalRecent);
+      let tier = 'ใหม่';
+      let tierKey = 'new';
+      if (depositForTier >= vipMin) {
+        tier = 'VIP';
+        tierKey = 'vip';
+      } else if (depositForTier >= generalMin) {
+        tier = 'ทั่วไป';
+        tierKey = 'general';
+      }
+
+      rows.push({
+        username,
+        name: mem.name,
+        phone: mem.phone,
+        bank: mem.bank,
+        tier,
+        tierKey,
+        lifetimeDeposit: mem.lifetimeDeposit,
+        prevMonthDeposit,
+        prevMonthCount,
+        curMonthDeposit,
+        curMonthCount,
+        recentTotalDeposit: totalRecent,
+        hasPrevDeposit: hasPrev,
+        hasCurDeposit: hasCur,
+        hasBothMonths: hasBoth,
+        depositStatus,
+        depositStatusKey,
+        lastDepositAt: lastDepAt || '-',
+        lastOnline: mem.lastOnline,
+        registeredAt: mem.registeredAt
+      });
+    }
+
+    // Sort descending by recent total deposit
+    rows.sort((a, b) => b.recentTotalDeposit - a.recentTotalDeposit);
+    rows.forEach((r, idx) => {
+      r.rank = idx + 1;
+    });
+
+    // Compute Summaries
+    const bothList = rows.filter((r) => r.hasBothMonths);
+    const prevList = rows.filter((r) => r.hasPrevDeposit);
+
+    const calcGroup = (arr) => {
+      const vip = arr.filter((r) => r.tierKey === 'vip');
+      const gen = arr.filter((r) => r.tierKey === 'general');
+      const nw = arr.filter((r) => r.tierKey === 'new');
+      return {
+        totalCount: arr.length,
+        totalPrevDeposit: arr.reduce((s, r) => s + r.prevMonthDeposit, 0),
+        totalCurDeposit: arr.reduce((s, r) => s + r.curMonthDeposit, 0),
+        totalRecentDeposit: arr.reduce((s, r) => s + r.recentTotalDeposit, 0),
+        vip: {
+          count: vip.length,
+          prevDeposit: vip.reduce((s, r) => s + r.prevMonthDeposit, 0),
+          curDeposit: vip.reduce((s, r) => s + r.curMonthDeposit, 0),
+          totalDeposit: vip.reduce((s, r) => s + r.recentTotalDeposit, 0)
+        },
+        general: {
+          count: gen.length,
+          prevDeposit: gen.reduce((s, r) => s + r.prevMonthDeposit, 0),
+          curDeposit: gen.reduce((s, r) => s + r.curMonthDeposit, 0),
+          totalDeposit: gen.reduce((s, r) => s + r.recentTotalDeposit, 0)
+        },
+        new: {
+          count: nw.length,
+          prevDeposit: nw.reduce((s, r) => s + r.prevMonthDeposit, 0),
+          curDeposit: nw.reduce((s, r) => s + r.curMonthDeposit, 0),
+          totalDeposit: nw.reduce((s, r) => s + r.recentTotalDeposit, 0)
+        }
+      };
+    };
+
+    const summary = {
+      bothMonths: calcGroup(bothList),
+      prevMonth: calcGroup(prevList),
+      allRecent: calcGroup(rows)
+    };
+
+    cachedLatestMonthData = {
+      config,
+      curMonth,
+      prevMonth,
+      rows,
+      summary,
+      fetchedAt: Date.now()
+    };
+
+    sendLatestMonthProgress({
+      status: 'done',
+      step: 3,
+      totalSteps: 3,
+      percent: 100,
+      message: `ดึงข้อมูลสำเร็จ! รวม ${rows.length.toLocaleString('th-TH')} ยูสเซอร์ (ฝากทั้ง 2 เดือน: ${bothList.length.toLocaleString('th-TH')} คน, ฝากเดือนที่แล้ว: ${prevList.length.toLocaleString('th-TH')} คน)`
+    });
+
+    return {
+      ok: true,
+      curMonth,
+      prevMonth,
+      totalMembersScanned: memberMap.size,
+      totalDepositors: rows.length,
+      summary,
+      rows,
+      config
+    };
+  } catch (error) {
+    console.error('[LatestMonth] Error in fetchLatestMonthDepositors:', error);
+    sendLatestMonthProgress({
+      status: 'error',
+      step: 3,
+      totalSteps: 3,
+      percent: 100,
+      message: `❌ เกิดข้อผิดพลาด: ${error?.message || error}`
+    });
+    throw error;
+  }
+}
+
+function populateLatestMonthSheet(sheet, list, sheetTitle, curMonth, prevMonth, headerBgColor = 'FF1E293B') {
+  const prevLabel = prevMonth ? prevMonth.shortLabel : 'เดือนที่แล้ว';
+  const curLabel = curMonth ? curMonth.shortLabel : 'เดือนนี้';
+
+  sheet.columns = [
+    { header: 'อันดับ', key: 'rank', width: 9 },
+    { header: 'ยูสเซอร์', key: 'username', width: 19 },
+    { header: 'ชื่อ-นามสกุล', key: 'name', width: 25 },
+    { header: 'เบอร์โทร', key: 'phone', width: 17 },
+    { header: 'กลุ่มลูกค้า', key: 'tier', width: 14 },
+    { header: `ยอดฝาก (${prevLabel})`, key: 'prevMonthDeposit', width: 20 },
+    { header: 'จำนวนครั้ง', key: 'prevMonthCount', width: 13 },
+    { header: `ยอดฝาก (${curLabel})`, key: 'curMonthDeposit', width: 20 },
+    { header: 'จำนวนครั้ง', key: 'curMonthCount', width: 13 },
+    { header: 'ยอดฝากรวม 2 เดือน', key: 'recentTotalDeposit', width: 22 },
+    { header: 'ยอดฝากสะสมตลอดชีพ', key: 'lifetimeDeposit', width: 22 },
+    { header: 'สถานะการฝาก', key: 'depositStatus', width: 22 },
+    { header: 'วันที่ฝากล่าสุด', key: 'lastDepositAt', width: 20 },
+    { header: 'ออนไลน์ล่าสุด', key: 'lastOnline', width: 20 },
+    { header: 'วันที่สมัคร', key: 'registeredAt', width: 16 }
+  ];
+
+  const headerRow = sheet.getRow(1);
+  headerRow.height = 30;
+  headerRow.eachCell((cell) => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: headerBgColor } };
+    cell.font = { name: 'Segoe UI', bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+  });
+
+  let sumPrev = 0;
+  let sumCur = 0;
+  let sumRecent = 0;
+  let sumLifetime = 0;
+
+  list.forEach((m, idx) => {
+    sumPrev += m.prevMonthDeposit;
+    sumCur += m.curMonthDeposit;
+    sumRecent += m.recentTotalDeposit;
+    sumLifetime += m.lifetimeDeposit;
+
+    const row = sheet.addRow({
+      rank: idx + 1,
+      username: m.username,
+      name: m.name,
+      phone: m.phone,
+      tier: m.tier,
+      prevMonthDeposit: m.prevMonthDeposit,
+      prevMonthCount: m.prevMonthCount,
+      curMonthDeposit: m.curMonthDeposit,
+      curMonthCount: m.curMonthCount,
+      recentTotalDeposit: m.recentTotalDeposit,
+      lifetimeDeposit: m.lifetimeDeposit,
+      depositStatus: m.depositStatus,
+      lastDepositAt: m.lastDepositAt || '-',
+      lastOnline: m.lastOnline || '-',
+      registeredAt: m.registeredAt || '-'
+    });
+
+    row.height = 22;
+
+    row.getCell('rank').alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell('username').alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell('name').alignment = { horizontal: 'left', vertical: 'middle' };
+    row.getCell('phone').alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell('tier').alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell('prevMonthDeposit').alignment = { horizontal: 'right', vertical: 'middle' };
+    row.getCell('prevMonthDeposit').numFmt = '#,##0.00';
+    row.getCell('prevMonthCount').alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell('curMonthDeposit').alignment = { horizontal: 'right', vertical: 'middle' };
+    row.getCell('curMonthDeposit').numFmt = '#,##0.00';
+    row.getCell('curMonthCount').alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell('recentTotalDeposit').alignment = { horizontal: 'right', vertical: 'middle' };
+    row.getCell('recentTotalDeposit').numFmt = '#,##0.00';
+    row.getCell('recentTotalDeposit').font = { bold: true };
+    row.getCell('lifetimeDeposit').alignment = { horizontal: 'right', vertical: 'middle' };
+    row.getCell('lifetimeDeposit').numFmt = '#,##0.00';
+    row.getCell('depositStatus').alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell('lastDepositAt').alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell('lastOnline').alignment = { horizontal: 'center', vertical: 'middle' };
+    row.getCell('registeredAt').alignment = { horizontal: 'center', vertical: 'middle' };
+
+    if (m.tierKey === 'vip') {
+      row.getCell('tier').font = { bold: true, color: { argb: 'FFD97706' } };
+      row.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: idx % 2 === 1 ? 'FFFFFBEB' : 'FFFFFDF5' } };
+      });
+    } else if (m.tierKey === 'general') {
+      row.getCell('tier').font = { bold: true, color: { argb: 'FF2563EB' } };
+      if (idx % 2 === 1) {
+        row.eachCell((cell) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F9FF' } };
+        });
+      }
+    } else {
+      if (idx % 2 === 1) {
+        row.eachCell((cell) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+        });
+      }
+    }
+  });
+
+  const totalRow = sheet.addRow({
+    rank: '',
+    username: 'รวมทั้งหมด',
+    name: '',
+    phone: `${list.length.toLocaleString('th-TH')} คน`,
+    tier: '',
+    prevMonthDeposit: sumPrev,
+    prevMonthCount: '',
+    curMonthDeposit: sumCur,
+    curMonthCount: '',
+    recentTotalDeposit: sumRecent,
+    lifetimeDeposit: sumLifetime,
+    depositStatus: '',
+    lastDepositAt: '',
+    lastOnline: '',
+    registeredAt: ''
+  });
+
+  totalRow.height = 28;
+  totalRow.eachCell((cell) => {
+    cell.font = { name: 'Segoe UI', bold: true, size: 11 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+    cell.border = {
+      top: { style: 'medium', color: { argb: 'FF94A3B8' } },
+      bottom: { style: 'double', color: { argb: 'FF475569' } }
+    };
+  });
+  totalRow.getCell('prevMonthDeposit').alignment = { horizontal: 'right', vertical: 'middle' };
+  totalRow.getCell('prevMonthDeposit').numFmt = '#,##0.00';
+  totalRow.getCell('curMonthDeposit').alignment = { horizontal: 'right', vertical: 'middle' };
+  totalRow.getCell('curMonthDeposit').numFmt = '#,##0.00';
+  totalRow.getCell('recentTotalDeposit').alignment = { horizontal: 'right', vertical: 'middle' };
+  totalRow.getCell('recentTotalDeposit').numFmt = '#,##0.00';
+  totalRow.getCell('lifetimeDeposit').alignment = { horizontal: 'right', vertical: 'middle' };
+  totalRow.getCell('lifetimeDeposit').numFmt = '#,##0.00';
+}
+
+async function exportLatestMonthDepositorsWorkbook(savePath = null, options = {}) {
+  let rows = cachedLatestMonthData.rows;
+  let curMonth = cachedLatestMonthData.curMonth;
+  let prevMonth = cachedLatestMonthData.prevMonth;
+
+  if (!rows || !rows.length) {
+    const fetchRes = await fetchLatestMonthDepositors(options);
+    rows = fetchRes.rows;
+    curMonth = fetchRes.curMonth;
+    prevMonth = fetchRes.prevMonth;
+  }
+
+  const mode = options.filterMode || 'both';
+  let targetList = [...rows];
+  let filterName = 'ฝากทั้ง2เดือน';
+
+  if (mode === 'both') {
+    targetList = targetList.filter((r) => r.hasBothMonths);
+    filterName = 'ฝากต่อเนื่อง_ทั้ง2เดือน';
+  } else if (mode === 'prev') {
+    targetList = targetList.filter((r) => r.hasPrevDeposit);
+    filterName = `ฝากล่าสุด_${prevMonth?.shortLabel || 'เดือนที่แล้ว'}`;
+  } else if (mode === 'prev_only') {
+    targetList = targetList.filter((r) => r.hasPrevDeposit && !r.hasCurDeposit);
+    filterName = `ฝากเฉพาะ_${prevMonth?.shortLabel || 'เดือนที่แล้ว'}`;
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'NK Helper Desktop';
+  workbook.created = new Date();
+
+  // Sheet 1: สรุปผู้ฝากตามเงื่อนไข
+  const sheetAll = workbook.addWorksheet(`สรุป_${filterName}`.slice(0, 31), { views: [{ showGridLines: true }] });
+  populateLatestMonthSheet(sheetAll, targetList, 'สรุปผู้ฝากตามเงื่อนไข', curMonth, prevMonth, 'FF1E293B');
+
+  // Sheet 2: กลุ่ม VIP
+  const vipList = targetList.filter((m) => m.tierKey === 'vip');
+  const sheetVip = workbook.addWorksheet('กลุ่ม VIP (1M+)', { views: [{ showGridLines: true }] });
+  populateLatestMonthSheet(sheetVip, vipList, 'กลุ่ม VIP', curMonth, prevMonth, 'FFD97706');
+
+  // Sheet 3: กลุ่มทั่วไป
+  const generalList = targetList.filter((m) => m.tierKey === 'general');
+  const sheetGeneral = workbook.addWorksheet('กลุ่มทั่วไป (100K-999K)', { views: [{ showGridLines: true }] });
+  populateLatestMonthSheet(sheetGeneral, generalList, 'กลุ่มทั่วไป', curMonth, prevMonth, 'FF2563EB');
+
+  // Sheet 4: กลุ่มใหม่
+  const newList = targetList.filter((m) => m.tierKey === 'new');
+  const sheetNew = workbook.addWorksheet('กลุ่มใหม่ (0-99K)', { views: [{ showGridLines: true }] });
+  populateLatestMonthSheet(sheetNew, newList, 'กลุ่มใหม่', curMonth, prevMonth, 'FF059669');
+
+  const d = new Date();
+  const defaultFilename = `NK_รายงานลูกค้าฝากล่าสุด_${filterName}_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.xlsx`;
+  const outputPath = savePath || path.join(os.homedir(), 'Downloads', defaultFilename);
+
+  const dir = path.dirname(outputPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  await workbook.xlsx.writeFile(outputPath);
+
+  return {
+    ok: true,
+    filePath: outputPath,
+    rowCount: targetList.length,
+    filterName
+  };
+}
+
 async function runRewardReport(config = {}, savePath = null) {
   await fetchRewardData(config);
   return exportRewardWorkbook(savePath, config);
@@ -3121,5 +3917,9 @@ module.exports = {
   fetchMonthlyTopDepositors,
   cancelMonthlyRanking,
   exportMonthlyTopDepositorsWorkbook,
+  fetchLatestMonthDepositors,
+  cancelLatestMonthDepositors,
+  exportLatestMonthDepositorsWorkbook,
+  getTwoRecentMonths,
   getMonthDateRanges
 };

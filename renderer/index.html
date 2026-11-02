@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NK BackOffice Helper v3.8.36</title>
+  <title>NK BackOffice Helper v3.8.37</title>
   <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
     <div class="titlebar-brand">
       <span class="brand-badge">NK</span>
       <span class="titlebar-title">BackOffice Helper Desktop</span>
-      <span class="version-tag" id="appVersionTag">v3.8.36</span>
+      <span class="version-tag" id="appVersionTag">v3.8.37</span>
     </div>
     <div class="titlebar-actions">
       <div id="remoteControlPill" class="session-status" style="display:inline-flex; align-items:center; gap:6px; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); color:#10b981; padding:3px 10px; border-radius:20px; font-size:11.5px; font-weight:600;" title="สถานะเชื่อมต่อศูนย์ควบคุมออนไลน์ Railway">
@@ -1302,7 +1302,155 @@
             </div>
           </div>
 
-          <!-- 4. จัดอันดับยอดฝากสูงสุด (ดึงยูสเซอร์ทั้งหมด & ยอดฝากรวม) -->
+          <!-- 3. ดึงรายงานลูกค้าฝากเดือนล่าสุด (ดึงจากยูสเซอร์ทั้งหมด) -->
+          <div class="form-card" id="cardLatestMonthDepositors" style="margin-top:20px; border-left: 4px solid #10b981;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+              <div>
+                <h3 style="font-size:15px; margin:0; display:flex; align-items:center; gap:8px;">
+                  <span>👥 3. ดึงรายงานลูกค้าฝากเดือนล่าสุด (ดึงจากยูสเซอร์ทั้งหมด)</span>
+                  <span style="font-size:11px; background:rgba(16,185,129,0.15); color:#10b981; border:1px solid rgba(16,185,129,0.3); padding:2px 8px; border-radius:12px; font-weight:600;">แยกกลุ่ม VIP / ทั่วไป / ใหม่ · กรองการฝาก 2 เดือน</span>
+                </h3>
+                <p style="font-size:12px; color:var(--text-dim); margin:4px 0 0 0;">ดึงข้อมูลยูสเซอร์ทั้งหมด วิเคราะห์ยอดฝากเดือนที่แล้วและเดือนนี้ พร้อมระบบกรองเฉพาะผู้ที่ฝากล่าสุดเดือนที่แล้ว หรือกรองผู้ที่มียอดฝากต่อเนื่องทั้ง 2 เดือน (ไม่เอาแบบเดือนนี้มีเดือนก่อนไม่มี)</p>
+              </div>
+            </div>
+
+            <!-- Action & Filter Bar -->
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+              <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                <!-- Filter Mode Selection -->
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <label for="selLatestDepositFilterMode" style="font-size:12px; color:var(--text-muted); font-weight:600;">เงื่อนไขการกรอง:</label>
+                  <select id="selLatestDepositFilterMode" class="daily-select" style="min-width:240px; height:42px; font-weight:600; font-size:12.5px; border-color:rgba(16,185,129,0.4);">
+                    <option value="both" selected>🌟 ฝากทั้ง 2 เดือน (เดือนที่แล้ว + เดือนนี้)</option>
+                    <option value="prev">📌 ฝากล่าสุดเดือนที่แล้ว (มียอดฝากในเดือนที่แล้ว)</option>
+                    <option value="prev_only">⏳ ฝากเดือนที่แล้วเท่านั้น (เดือนนี้ยังไม่ฝาก)</option>
+                    <option value="all">🌐 แสดงทุกคนที่ฝากล่าสุด (เดือนใดเดือนหนึ่ง หรือ 2 เดือน)</option>
+                  </select>
+                </div>
+
+                <!-- Month Reference Selection -->
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <label for="selLatestMonthRef" style="font-size:12px; color:var(--text-muted);">เดือนอ้างอิง:</label>
+                  <select id="selLatestMonthRef" class="daily-select" style="height:42px; font-size:12px;">
+                    <!-- Populated dynamically via JS -->
+                  </select>
+                </div>
+
+                <!-- Fetch and Clear Buttons -->
+                <button id="btnFetchLatestMonthDepositors" class="btn btn-accent" style="height:42px; padding:0 22px; font-weight:700; font-size:13.5px; display:inline-flex; align-items:center; gap:8px; background:linear-gradient(135deg, #10b981, #059669); border:none; color:#ffffff;">
+                  <span>🔍 ดึงรายงานลูกค้าฝากล่าสุด</span>
+                </button>
+                <button type="button" id="btnClearLatestMonthDepositors" class="btn btn-secondary" style="height:42px; padding:0 16px;" title="ล้างผลการดึงข้อมูล">
+                  <span>ล้าง</span>
+                </button>
+              </div>
+
+              <!-- Tier Legend Badges -->
+              <div style="display:flex; flex-wrap:wrap; gap:8px; font-size:11.5px; color:var(--text-dim); align-items:center;">
+                <span style="font-weight:600;">เกณฑ์กลุ่ม:</span>
+                <span style="background:rgba(217,119,6,0.12); color:#f59e0b; border:1px solid rgba(217,119,6,0.3); padding:2px 8px; border-radius:6px;">🥇 VIP: ฿1,000,000+</span>
+                <span style="background:rgba(37,99,235,0.12); color:#38bdf8; border:1px solid rgba(37,99,235,0.3); padding:2px 8px; border-radius:6px;">🥈 ทั่วไป: ฿100,000 – ฿999,999</span>
+                <span style="background:rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.3); padding:2px 8px; border-radius:6px;">🥉 ใหม่: ฿0 – ฿99,999</span>
+              </div>
+            </div>
+
+            <div id="statusLatestMonth" style="margin-top:10px; font-size:12px; color:var(--text-muted);"></div>
+
+            <!-- Live Progress Bar & Cancel Control -->
+            <div id="latestMonthProgressBarContainer" style="display:none; margin-top:12px; background:rgba(0,0,0,0.25); border:1px solid var(--border-subtle); border-radius:8px; padding:12px 14px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; font-size:12px;">
+                <span id="latestMonthProgressText" style="color:var(--text-primary); font-weight:600;">⏳ กำลังเริ่มดึงข้อมูล...</span>
+                <span id="latestMonthProgressPercent" style="color:#10b981; font-weight:700; font-family:monospace;">0%</span>
+              </div>
+              <div style="width:100%; height:8px; background:rgba(255,255,255,0.08); border-radius:4px; overflow:hidden;">
+                <div id="latestMonthProgressBarFill" style="width:0%; height:100%; background:linear-gradient(90deg, #10b981, #38bdf8); transition:width 0.25s ease; border-radius:4px;"></div>
+              </div>
+              <div style="margin-top:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <small style="color:var(--text-dim); font-size:11px;">* ระบบจะดึงประวัติการฝาก 2 เดือนและข้อมูลสมาชิกทั้งหมด สามารถกดหยุดเพื่อดูและส่งออกข้อมูลเท่าที่ดึงได้ทันที</small>
+                <button type="button" id="btnCancelLatestMonth" class="btn btn-secondary btn-sm" style="height:28px; padding:0 12px; font-size:11.5px; color:#ef4444; border-color:rgba(239,68,68,0.4); font-weight:600;">
+                  ⏹️ หยุดดึงข้อมูล (แสดงเท่าที่ได้)
+                </button>
+              </div>
+            </div>
+
+            <!-- Container Results (Hidden until fetched) -->
+            <div id="containerLatestMonthResults" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--border-subtle);">
+              <!-- 4 Stat Cards -->
+              <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:12px; margin-bottom:16px;">
+                <div class="wallet-stat-card" style="border-left:4px solid #f59e0b; background:linear-gradient(135deg, rgba(217,119,6,0.1), rgba(15,23,42,0.6));">
+                  <div class="wallet-stat-title" style="color:#f59e0b;">🥇 กลุ่ม VIP (1M+)</div>
+                  <div class="wallet-stat-val text-warning" id="statLatestVipAmount">฿0.00</div>
+                  <div class="wallet-stat-hint" id="statLatestVipCount">0 คน</div>
+                </div>
+                <div class="wallet-stat-card" style="border-left:4px solid #38bdf8; background:linear-gradient(135deg, rgba(56,189,248,0.1), rgba(15,23,42,0.6));">
+                  <div class="wallet-stat-title" style="color:#38bdf8;">🥈 กลุ่มทั่วไป (100K - 999K)</div>
+                  <div class="wallet-stat-val text-primary" id="statLatestGeneralAmount">฿0.00</div>
+                  <div class="wallet-stat-hint" id="statLatestGeneralCount">0 คน</div>
+                </div>
+                <div class="wallet-stat-card" style="border-left:4px solid #10b981; background:linear-gradient(135deg, rgba(16,185,129,0.1), rgba(15,23,42,0.6));">
+                  <div class="wallet-stat-title" style="color:#10b981;">🥉 กลุ่มใหม่ (0 - 99K)</div>
+                  <div class="wallet-stat-val" style="color:#10b981;" id="statLatestNewAmount">฿0.00</div>
+                  <div class="wallet-stat-hint" id="statLatestNewCount">0 คน</div>
+                </div>
+                <div class="wallet-stat-card highlight">
+                  <div class="wallet-stat-title" id="statLatestTotalTitle">👥 สรุปยอดผู้ผ่านเงื่อนไข</div>
+                  <div class="wallet-stat-val" id="statLatestTotalAmount">฿0.00</div>
+                  <div class="wallet-stat-hint" id="statLatestTotalCount">รวม 0 คน</div>
+                </div>
+              </div>
+
+              <!-- Header Bar for Table: Filter Buttons & Export Action -->
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+                <!-- Filter Tabs: All, VIP, General, New -->
+                <div class="btn-group" id="latestTierFilters" style="display:inline-flex; gap:6px;">
+                  <button class="btn btn-secondary active" data-latest-tier="all" style="height:32px; padding:0 12px; font-size:12px;">ทั้งหมด (<span id="countLatestTabAll">0</span>)</button>
+                  <button class="btn btn-secondary" data-latest-tier="vip" style="height:32px; padding:0 12px; font-size:12px; color:#f59e0b;">🥇 VIP (<span id="countLatestTabVip">0</span>)</button>
+                  <button class="btn btn-secondary" data-latest-tier="general" style="height:32px; padding:0 12px; font-size:12px; color:#38bdf8;">🥈 ทั่วไป (<span id="countLatestTabGeneral">0</span>)</button>
+                  <button class="btn btn-secondary" data-latest-tier="new" style="height:32px; padding:0 12px; font-size:12px; color:#10b981;">🥉 ใหม่ (<span id="countLatestTabNew">0</span>)</button>
+                </div>
+
+                <!-- Quick Filter Pill & Search & Export -->
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                  <div style="position:relative; min-width:200px;">
+                    <input type="text" id="searchLatestMonthTable" class="input-field" placeholder="🔎 ค้นหายูสเซอร์, เบอร์, ชื่อ..." style="width:100%; height:34px; font-size:12px; padding:4px 10px;">
+                  </div>
+                  <button id="btnExportLatestMonthExcel" class="btn btn-accent" style="height:36px; padding:0 16px; font-size:12px; display:inline-flex; align-items:center; gap:6px; background:#10b981; border-color:#059669; color:#fff;">
+                    📊 ส่งออก Excel (.xlsx) แยกกลุ่มลูกค้า
+                  </button>
+                </div>
+              </div>
+
+              <!-- Table Preview -->
+              <div class="table-responsive" style="max-height:440px; overflow-y:auto; border:1px solid var(--border-subtle); border-radius:8px; background:rgba(0,0,0,0.15);">
+                <table class="data-table" style="width:100%; border-collapse:collapse; font-size:12px;">
+                  <thead style="position:sticky; top:0; z-index:2; background:#1e293b; color:#fff;">
+                    <tr>
+                      <th style="padding:10px 8px; text-align:center; width:45px;">#</th>
+                      <th style="padding:10px 10px; text-align:center; width:130px;">ยูสเซอร์</th>
+                      <th style="padding:10px 10px; text-align:left; width:150px;">ชื่อลูกค้า</th>
+                      <th style="padding:10px 10px; text-align:center; width:110px;">เบอร์โทร</th>
+                      <th style="padding:10px 10px; text-align:center; width:90px;">กลุ่ม</th>
+                      <th style="padding:10px 10px; text-align:right; width:125px;" id="thColPrevMonth">ยอดฝากเดือนที่แล้ว</th>
+                      <th style="padding:10px 10px; text-align:right; width:125px;" id="thColCurMonth">ยอดฝากเดือนนี้</th>
+                      <th style="padding:10px 10px; text-align:right; width:130px;">ยอดรวม 2 เดือน</th>
+                      <th style="padding:10px 10px; text-align:center; width:130px;">สถานะการฝาก</th>
+                      <th style="padding:10px 10px; text-align:center; width:140px;">วันที่ฝากล่าสุด</th>
+                      <th style="padding:10px 10px; text-align:center; width:110px;">วันที่สมัคร</th>
+                    </tr>
+                  </thead>
+                  <tbody id="latestMonthTableBody">
+                    <tr>
+                      <td colspan="11" style="text-align:center; padding:30px; color:var(--text-dim);">กดปุ่ม "ดึงรายงานลูกค้าฝากล่าสุด" เพื่อดูข้อมูล</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px; font-size:11.5px; color:var(--text-dim);">
+                <span id="latestMonthTableInfo">แสดง 0 รายการ</span>
+                <span id="latestMonthTableSubInfo">* จัดเรียงจากยอดฝากรวม 2 เดือนสูงสุดลงไปหาต่ำสุด</span>
+              </div>
+            </div>
+          </div>
           <div class="form-card" style="margin-top:20px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
               <div>
@@ -1646,7 +1794,7 @@
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
               <div>
                 <h3 style="font-size:15px; margin-bottom:4px;">🚀 เวอร์ชันโปรแกรม (NK Helper Desktop)</h3>
-                <span style="font-size:12.5px; color:var(--accent); font-weight:700;">เวอร์ชันปัจจุบัน: v3.8.36</span>
+                <span style="font-size:12.5px; color:var(--accent); font-weight:700;">เวอร์ชันปัจจุบัน: v3.8.37</span>
                 <p style="font-size:11px; color:var(--text-muted); margin-top:2px;">รองรับเมนูเว็บ Agent (ag.ismgaming6.com), แก้ไขช่องกรอก วันที่/เวลา แบบฟอร์ม, บันทึกฟอร์มปลอดภัย Offline First</p>
               </div>
               <div style="display:flex; gap:8px; flex-wrap:wrap;">
