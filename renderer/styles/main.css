@@ -2495,20 +2495,72 @@ body.light-theme .btn-clear-input:hover {
 }
 
 .daily-select {
-  background: rgba(255, 255, 255, 0.05);
+  background: #1e293b;
   border: 1px solid var(--border);
-  color: var(--text);
-  padding: 5px 10px;
+  color: #f8fafc;
+  padding: 6px 12px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 12.5px;
   outline: none;
   cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.daily-select:focus {
+  border-color: #10b981;
+}
+
+.daily-select option {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  padding: 8px 12px;
 }
 
 body.light-theme .daily-select {
   background: #f8fafc;
   border-color: #cbd5e1;
   color: #1e293b;
+}
+
+body.light-theme .daily-select option {
+  background-color: #ffffff !important;
+  color: #1e293b !important;
+}
+
+/* Latest Month Mode Toggle Buttons */
+.btn-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-mode-toggle:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.btn-mode-toggle.active {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(6, 182, 212, 0.15));
+  border-color: #10b981 !important;
+  color: #34d399 !important;
+  font-weight: 700;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.25);
+}
+
+body.light-theme .btn-mode-toggle.active {
+  background: #ecfdf5;
+  border-color: #10b981 !important;
+  color: #047857 !important;
 }
 
 .daily-table-responsive {

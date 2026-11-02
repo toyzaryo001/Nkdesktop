@@ -2927,16 +2927,25 @@ async function exportLatestMonthDepositorsWorkbook(savePath = null, options = {}
   let targetList = [...rows];
   let filterName = 'ฝากทั้ง2เดือน';
 
-  if (mode === 'both') {
-    targetList = targetList.filter((r) => r.hasBothMonths);
-    filterName = 'ฝากต่อเนื่อง_ทั้ง2เดือน';
+  if (mode === 'cur' || mode === 'current') {
+    targetList = targetList.filter((r) => r.hasCurDeposit);
+    targetList.sort((a, b) => b.curMonthDeposit - a.curMonthDeposit);
+    filterName = `ฝากเดือนนี้_${curMonth?.shortLabel || 'เดือนปัจจุบัน'}`;
   } else if (mode === 'prev') {
     targetList = targetList.filter((r) => r.hasPrevDeposit);
-    filterName = `ฝากล่าสุด_${prevMonth?.shortLabel || 'เดือนที่แล้ว'}`;
-  } else if (mode === 'prev_only') {
-    targetList = targetList.filter((r) => r.hasPrevDeposit && !r.hasCurDeposit);
-    filterName = `ฝากเฉพาะ_${prevMonth?.shortLabel || 'เดือนที่แล้ว'}`;
+    targetList.sort((a, b) => b.prevMonthDeposit - a.prevMonthDeposit);
+    filterName = `ฝากเดือนที่แล้ว_${prevMonth?.shortLabel || 'เดือนก่อนหน้า'}`;
+  } else {
+    // default: both
+    targetList = targetList.filter((r) => r.hasBothMonths);
+    targetList.sort((a, b) => b.recentTotalDeposit - a.recentTotalDeposit);
+    filterName = `ฝากทั้ง2เดือน_${curMonth?.shortLabel || 'ด.นี้'}+${prevMonth?.shortLabel || 'ด.ก่อน'}`;
   }
+
+  // Recalculate rank for exported list
+  targetList.forEach((r, idx) => {
+    r.rank = idx + 1;
+  });
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'NK Helper Desktop';

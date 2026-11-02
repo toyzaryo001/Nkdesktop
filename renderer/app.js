@@ -3344,9 +3344,84 @@ if (btnExportMonthlyRankingExcel) {
 let latestMonthAllRows = [];
 let latestMonthCurMonth = null;
 let latestMonthPrevMonth = null;
-let latestMonthFilterMode = 'both'; // 'both', 'prev', 'prev_only', 'all'
+let latestMonthFilterMode = 'both'; // 'both', 'cur', 'prev'
 let latestMonthTierFilter = 'all'; // 'all', 'vip', 'general', 'new'
 let latestMonthSearchQuery = '';
+
+function updateLatestMonthDynamicLabels(refYm) {
+  let curM = latestMonthCurMonth;
+  let prevM = latestMonthPrevMonth;
+
+  if (!curM || !prevM) {
+    const THAI_MONTHS = ['', 'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    let now = new Date();
+    if (refYm && /^\d{4}-\d{2}$/.test(refYm)) {
+      const [y, m] = refYm.split('-').map(Number);
+      now = new Date(y, m - 1, 15);
+    }
+    const cY = now.getFullYear();
+    const cM = now.getMonth() + 1;
+    let pM = cM - 1;
+    let pY = cY;
+    if (pM <= 0) {
+      pM = 12;
+      pY -= 1;
+    }
+    curM = {
+      shortLabel: `${THAI_MONTHS[cM]} ${cY + 543}`,
+      fullLabel: `เดือนนี้ (${THAI_MONTHS[cM]} ${cY + 543})`
+    };
+    prevM = {
+      shortLabel: `${THAI_MONTHS[pM]} ${pY + 543}`,
+      fullLabel: `เดือนที่แล้ว (${THAI_MONTHS[pM]} ${pY + 543})`
+    };
+  }
+
+  // Dropdown options
+  const optCur = document.getElementById('optFilterCur');
+  const optPrev = document.getElementById('optFilterPrev');
+  const optBoth = document.getElementById('optFilterBoth');
+  if (optCur) optCur.textContent = `📅 1. ฝากเดือนนี้ (${curM.shortLabel})`;
+  if (optPrev) optPrev.textContent = `⏪ 2. ฝากเดือนที่แล้ว (${prevM.shortLabel})`;
+  if (optBoth) optBoth.textContent = `🌟 3. ฝากเดือนนี้ + เดือนที่แล้ว (${curM.shortLabel} + ${prevM.shortLabel})`;
+
+  // Quick toggle buttons sublabels
+  const subCur = document.getElementById('sublabelModeCur');
+  const subPrev = document.getElementById('sublabelModePrev');
+  const subBoth = document.getElementById('sublabelModeBoth');
+  if (subCur) subCur.textContent = `(${curM.shortLabel})`;
+  if (subPrev) subPrev.textContent = `(${prevM.shortLabel})`;
+  if (subBoth) subBoth.textContent = `(${curM.shortLabel} + ${prevM.shortLabel})`;
+
+  // Table column headers
+  const thCur = document.getElementById('thColCurMonth');
+  const thPrev = document.getElementById('thColPrevMonth');
+  if (thCur) thCur.textContent = `ยอดฝาก (${curM.shortLabel})`;
+  if (thPrev) thPrev.textContent = `ยอดฝาก (${prevM.shortLabel})`;
+}
+
+function setLatestMonthFilterMode(mode) {
+  if (!['both', 'cur', 'prev'].includes(mode)) {
+    mode = 'both';
+  }
+  latestMonthFilterMode = mode;
+
+  // Sync select dropdown
+  const selMode = document.getElementById('selLatestDepositFilterMode');
+  if (selMode && selMode.value !== mode) {
+    selMode.value = mode;
+  }
+
+  // Sync quick toggle buttons
+  const buttons = document.querySelectorAll('.btn-mode-toggle[data-latest-mode]');
+  buttons.forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.latestMode === mode);
+  });
+
+  if (latestMonthAllRows && latestMonthAllRows.length > 0) {
+    renderLatestMonthView();
+  }
+}
 
 function initLatestMonthControls() {
   const selMonthRef = document.getElementById('selLatestMonthRef');
@@ -3367,12 +3442,27 @@ function initLatestMonthControls() {
     `<option value="${opt.ym}" ${idx === 0 ? 'selected' : ''}>${opt.label}</option>`
   ).join('');
 
-  // Mode change
+  selMonthRef.addEventListener('change', () => {
+    latestMonthCurMonth = null;
+    latestMonthPrevMonth = null;
+    updateLatestMonthDynamicLabels(selMonthRef.value);
+  });
+
+  // Mode change via dropdown
   const selMode = document.getElementById('selLatestDepositFilterMode');
   if (selMode) {
     selMode.addEventListener('change', () => {
-      latestMonthFilterMode = selMode.value;
-      renderLatestMonthView();
+      setLatestMonthFilterMode(selMode.value);
+    });
+  }
+
+  // Mode change via quick toggle buttons
+  const toggleGroup = document.querySelector('.latest-mode-toggle-group');
+  if (toggleGroup) {
+    toggleGroup.addEventListener('click', (e) => {
+      const btn = e.target.closest('.btn-mode-toggle');
+      if (!btn || !btn.dataset.latestMode) return;
+      setLatestMonthFilterMode(btn.dataset.latestMode);
     });
   }
 
@@ -3418,6 +3508,9 @@ function initLatestMonthControls() {
       });
     });
   }
+
+  // Initial update of dynamic month names on options and pills
+  updateLatestMonthDynamicLabels(selMonthRef.value);
 }
 
 // Progress listener
@@ -3447,7 +3540,6 @@ if (btnFetchLatestMonth) {
     const progressText = document.getElementById('latestMonthProgressText');
     const progressPct = document.getElementById('latestMonthProgressPercent');
     const selMonthRef = document.getElementById('selLatestMonthRef');
-    const selMode = document.getElementById('selLatestDepositFilterMode');
 
     if (progressBox) progressBox.style.display = 'block';
     if (progressBar) progressBar.style.width = '0%';
@@ -3463,8 +3555,7 @@ if (btnFetchLatestMonth) {
 
     try {
       const yearMonth = selMonthRef ? selMonthRef.value : undefined;
-      const filterMode = selMode ? selMode.value : 'both';
-      latestMonthFilterMode = filterMode;
+      const filterMode = latestMonthFilterMode || 'both';
 
       const res = await window.nkAPI.fetchLatestMonthDepositors({
         yearMonth,
@@ -3476,23 +3567,15 @@ if (btnFetchLatestMonth) {
         latestMonthCurMonth = res.curMonth;
         latestMonthPrevMonth = res.prevMonth;
 
-        // Update table column headers
-        const thPrev = document.getElementById('thColPrevMonth');
-        const thCur = document.getElementById('thColCurMonth');
-        if (thPrev && res.prevMonth) {
-          thPrev.textContent = `ยอดฝาก (${res.prevMonth.shortLabel})`;
-        }
-        if (thCur && res.curMonth) {
-          thCur.textContent = `ยอดฝาก (${res.curMonth.shortLabel})`;
-        }
-
+        updateLatestMonthDynamicLabels(yearMonth);
         renderLatestMonthView();
 
         if (container) container.style.display = 'block';
         if (statusEl) {
           const bothCount = latestMonthAllRows.filter((r) => r.hasBothMonths).length;
+          const curCount = latestMonthAllRows.filter((r) => r.hasCurDeposit).length;
           const prevCount = latestMonthAllRows.filter((r) => r.hasPrevDeposit).length;
-          statusEl.textContent = `✅ ดึงข้อมูลสำเร็จ! รวมผู้ที่มียอดฝากล่าสุด ${latestMonthAllRows.length.toLocaleString('th-TH')} คน (ฝากทั้ง 2 เดือน: ${bothCount.toLocaleString('th-TH')} คน, ฝากเดือนที่แล้ว: ${prevCount.toLocaleString('th-TH')} คน)`;
+          statusEl.textContent = `✅ ดึงข้อมูลสำเร็จ! รวมผู้ที่มียอดฝาก ${latestMonthAllRows.length.toLocaleString('th-TH')} คน (ฝากเดือนนี้: ${curCount.toLocaleString('th-TH')} คน, ฝากเดือนที่แล้ว: ${prevCount.toLocaleString('th-TH')} คน, ฝากทั้ง 2 เดือน: ${bothCount.toLocaleString('th-TH')} คน)`;
         }
 
         showToast({
@@ -3536,15 +3619,16 @@ if (btnCancelLatestMonth) {
 function renderLatestMonthView() {
   // 1. Filter rows by active filter mode
   let filteredRows = [];
-  if (latestMonthFilterMode === 'both') {
-    // "ถ้าเลือก 2 เดือน ดึงเฉพาะ คนที่มียอดฝากทั้ง 2 เดือนเท่านั้น ไม่เอาแบบ เดือนนี้มี เดือนก่อนไม่มี"
-    filteredRows = latestMonthAllRows.filter((r) => r.hasBothMonths);
+  if (latestMonthFilterMode === 'cur') {
+    filteredRows = latestMonthAllRows.filter((r) => r.hasCurDeposit);
+    filteredRows.sort((a, b) => (b.curMonthDeposit || 0) - (a.curMonthDeposit || 0));
   } else if (latestMonthFilterMode === 'prev') {
     filteredRows = latestMonthAllRows.filter((r) => r.hasPrevDeposit);
-  } else if (latestMonthFilterMode === 'prev_only') {
-    filteredRows = latestMonthAllRows.filter((r) => r.hasPrevDeposit && !r.hasCurDeposit);
+    filteredRows.sort((a, b) => (b.prevMonthDeposit || 0) - (a.prevMonthDeposit || 0));
   } else {
-    filteredRows = [...latestMonthAllRows];
+    // both
+    filteredRows = latestMonthAllRows.filter((r) => r.hasBothMonths);
+    filteredRows.sort((a, b) => (b.recentTotalDeposit || 0) - (a.recentTotalDeposit || 0));
   }
 
   // 2. Compute stats for filtered set
@@ -3552,12 +3636,31 @@ function renderLatestMonthView() {
   const genList = filteredRows.filter((r) => r.tierKey === 'general');
   const newList = filteredRows.filter((r) => r.tierKey === 'new');
 
-  const vipTot = vipList.reduce((s, r) => s + r.recentTotalDeposit, 0);
-  const genTot = genList.reduce((s, r) => s + r.recentTotalDeposit, 0);
-  const newTot = newList.reduce((s, r) => s + r.recentTotalDeposit, 0);
-  const grandTot = filteredRows.reduce((s, r) => s + r.recentTotalDeposit, 0);
-  const sumPrev = filteredRows.reduce((s, r) => s + r.prevMonthDeposit, 0);
-  const sumCur = filteredRows.reduce((s, r) => s + r.curMonthDeposit, 0);
+  let vipTot = 0;
+  let genTot = 0;
+  let newTot = 0;
+  let grandTot = 0;
+
+  if (latestMonthFilterMode === 'cur') {
+    vipTot = vipList.reduce((s, r) => s + (r.curMonthDeposit || 0), 0);
+    genTot = genList.reduce((s, r) => s + (r.curMonthDeposit || 0), 0);
+    newTot = newList.reduce((s, r) => s + (r.curMonthDeposit || 0), 0);
+    grandTot = filteredRows.reduce((s, r) => s + (r.curMonthDeposit || 0), 0);
+  } else if (latestMonthFilterMode === 'prev') {
+    vipTot = vipList.reduce((s, r) => s + (r.prevMonthDeposit || 0), 0);
+    genTot = genList.reduce((s, r) => s + (r.prevMonthDeposit || 0), 0);
+    newTot = newList.reduce((s, r) => s + (r.prevMonthDeposit || 0), 0);
+    grandTot = filteredRows.reduce((s, r) => s + (r.prevMonthDeposit || 0), 0);
+  } else {
+    // both
+    vipTot = vipList.reduce((s, r) => s + (r.recentTotalDeposit || 0), 0);
+    genTot = genList.reduce((s, r) => s + (r.recentTotalDeposit || 0), 0);
+    newTot = newList.reduce((s, r) => s + (r.recentTotalDeposit || 0), 0);
+    grandTot = filteredRows.reduce((s, r) => s + (r.recentTotalDeposit || 0), 0);
+  }
+
+  const sumPrev = filteredRows.reduce((s, r) => s + (r.prevMonthDeposit || 0), 0);
+  const sumCur = filteredRows.reduce((s, r) => s + (r.curMonthDeposit || 0), 0);
 
   // Update Stat Cards
   const elVipAmt = document.getElementById('statLatestVipAmount');
@@ -3580,19 +3683,27 @@ function renderLatestMonthView() {
   if (elNewCnt) elNewCnt.textContent = `${newList.length.toLocaleString('th-TH')} คน`;
 
   if (elTotAmt) elTotAmt.textContent = '฿' + grandTot.toLocaleString('th-TH', { minimumFractionDigits: 2 });
+
+  const prevL = latestMonthPrevMonth?.shortLabel || 'ด.ก่อน';
+  const curL = latestMonthCurMonth?.shortLabel || 'ด.นี้';
+
   if (elTotCnt) {
-    const prevL = latestMonthPrevMonth?.shortLabel || 'ด.ก่อน';
-    const curL = latestMonthCurMonth?.shortLabel || 'ด.นี้';
-    elTotCnt.textContent = `${filteredRows.length.toLocaleString('th-TH')} คน (${prevL}: ฿${sumPrev.toLocaleString('th-TH', { maximumFractionDigits: 0 })}, ${curL}: ฿${sumCur.toLocaleString('th-TH', { maximumFractionDigits: 0 })})`;
+    if (latestMonthFilterMode === 'cur') {
+      elTotCnt.textContent = `${filteredRows.length.toLocaleString('th-TH')} คน (${curL}: ฿${grandTot.toLocaleString('th-TH', { maximumFractionDigits: 0 })})`;
+    } else if (latestMonthFilterMode === 'prev') {
+      elTotCnt.textContent = `${filteredRows.length.toLocaleString('th-TH')} คน (${prevL}: ฿${grandTot.toLocaleString('th-TH', { maximumFractionDigits: 0 })})`;
+    } else {
+      elTotCnt.textContent = `${filteredRows.length.toLocaleString('th-TH')} คน (${prevL}: ฿${sumPrev.toLocaleString('th-TH', { maximumFractionDigits: 0 })}, ${curL}: ฿${sumCur.toLocaleString('th-TH', { maximumFractionDigits: 0 })})`;
+    }
   }
 
   if (elTotTitle) {
-    if (latestMonthFilterMode === 'both') {
-      elTotTitle.textContent = '🌟 สรุปยอด (ฝากทั้ง 2 เดือน)';
+    if (latestMonthFilterMode === 'cur') {
+      elTotTitle.textContent = `📅 สรุปยอด (1. ฝากเดือนนี้ - ${curL})`;
     } else if (latestMonthFilterMode === 'prev') {
-      elTotTitle.textContent = '📌 สรุปยอด (ฝากเดือนที่แล้ว)';
+      elTotTitle.textContent = `⏪ สรุปยอด (2. ฝากเดือนที่แล้ว - ${prevL})`;
     } else {
-      elTotTitle.textContent = '👥 สรุปยอดผู้ผ่านเงื่อนไข';
+      elTotTitle.textContent = '🌟 สรุปยอด (3. ฝากเดือนนี้ + เดือนที่แล้ว)';
     }
   }
 
@@ -3617,14 +3728,16 @@ function renderLatestMonthTable() {
 
   // 1. Mode filter
   let list = [];
-  if (latestMonthFilterMode === 'both') {
-    list = latestMonthAllRows.filter((r) => r.hasBothMonths);
+  if (latestMonthFilterMode === 'cur') {
+    list = latestMonthAllRows.filter((r) => r.hasCurDeposit);
+    list.sort((a, b) => (b.curMonthDeposit || 0) - (a.curMonthDeposit || 0));
   } else if (latestMonthFilterMode === 'prev') {
     list = latestMonthAllRows.filter((r) => r.hasPrevDeposit);
-  } else if (latestMonthFilterMode === 'prev_only') {
-    list = latestMonthAllRows.filter((r) => r.hasPrevDeposit && !r.hasCurDeposit);
+    list.sort((a, b) => (b.prevMonthDeposit || 0) - (a.prevMonthDeposit || 0));
   } else {
-    list = [...latestMonthAllRows];
+    // both
+    list = latestMonthAllRows.filter((r) => r.hasBothMonths);
+    list.sort((a, b) => (b.recentTotalDeposit || 0) - (a.recentTotalDeposit || 0));
   }
 
   // 2. Tier filter
@@ -3666,11 +3779,26 @@ function renderLatestMonthTable() {
 
     let statusBadge = '';
     if (m.hasBothMonths) {
-      statusBadge = '<span style="background:rgba(16,185,129,0.15); color:#10b981; border:1px solid rgba(16,185,129,0.35); padding:2px 8px; border-radius:12px; font-size:11px; font-weight:700;">🌟 ฝากทั้ง 2 เดือน</span>';
+      statusBadge = '<span style="background:rgba(16,185,129,0.18); color:#34d399; border:1px solid rgba(16,185,129,0.4); padding:2px 8px; border-radius:12px; font-size:11px; font-weight:700;">🌟 ฝากทั้ง 2 เดือน</span>';
+    } else if (m.hasCurDeposit) {
+      statusBadge = '<span style="background:rgba(59,130,246,0.18); color:#60a5fa; border:1px solid rgba(59,130,246,0.4); padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600;">📅 ฝากเดือนนี้</span>';
     } else if (m.hasPrevDeposit) {
-      statusBadge = '<span style="background:rgba(56,189,248,0.15); color:#38bdf8; border:1px solid rgba(56,189,248,0.35); padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600;">📌 ฝากเดือนที่แล้ว</span>';
+      statusBadge = '<span style="background:rgba(245,158,11,0.18); color:#fbbf24; border:1px solid rgba(245,158,11,0.4); padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600;">⏪ ฝากเดือนที่แล้ว</span>';
     } else {
-      statusBadge = '<span style="background:rgba(245,158,11,0.15); color:#f59e0b; border:1px solid rgba(245,158,11,0.35); padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600;">⚡ ฝากเฉพาะเดือนนี้</span>';
+      statusBadge = '<span style="color:var(--text-dim); font-size:11px;">-</span>';
+    }
+
+    // Dynamic column highlighting based on active filter mode
+    let colPrevStyle = `padding:8px 10px; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:${m.prevMonthDeposit > 0 ? 'var(--text)' : 'var(--text-dim)'};`;
+    let colCurStyle = `padding:8px 10px; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:${m.curMonthDeposit > 0 ? '#10b981' : 'var(--text-dim)'};`;
+    let colTotStyle = `padding:8px 10px; text-align:right; font-variant-numeric:tabular-nums; font-weight:700; color:#f59e0b;`;
+
+    if (latestMonthFilterMode === 'prev') {
+      colPrevStyle = `padding:8px 10px; text-align:right; font-variant-numeric:tabular-nums; font-weight:800; color:#38bdf8; background:rgba(56,189,248,0.1); border-radius:4px;`;
+    } else if (latestMonthFilterMode === 'cur') {
+      colCurStyle = `padding:8px 10px; text-align:right; font-variant-numeric:tabular-nums; font-weight:800; color:#34d399; background:rgba(16,185,129,0.12); border-radius:4px;`;
+    } else {
+      colTotStyle = `padding:8px 10px; text-align:right; font-variant-numeric:tabular-nums; font-weight:800; color:#fbbf24; background:rgba(245,158,11,0.1); border-radius:4px;`;
     }
 
     return `
@@ -3680,9 +3808,9 @@ function renderLatestMonthTable() {
         <td style="padding:8px 10px; text-align:left; color:var(--text);">${m.name || '-'}</td>
         <td style="padding:8px 10px; text-align:center; color:var(--text-muted); font-family:monospace;">${m.phone || '-'}</td>
         <td style="padding:8px 10px; text-align:center;">${tierBadge}</td>
-        <td style="padding:8px 10px; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:${m.prevMonthDeposit > 0 ? 'var(--text)' : 'var(--text-dim)'};">฿${(m.prevMonthDeposit || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
-        <td style="padding:8px 10px; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; color:${m.curMonthDeposit > 0 ? '#10b981' : 'var(--text-dim)'};">฿${(m.curMonthDeposit || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
-        <td style="padding:8px 10px; text-align:right; font-variant-numeric:tabular-nums; font-weight:700; color:#f59e0b;">฿${(m.recentTotalDeposit || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+        <td style="${colPrevStyle}">฿${(m.prevMonthDeposit || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+        <td style="${colCurStyle}">฿${(m.curMonthDeposit || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+        <td style="${colTotStyle}">฿${(m.recentTotalDeposit || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
         <td style="padding:8px 10px; text-align:center;">${statusBadge}</td>
         <td style="padding:8px 10px; text-align:center; font-size:11px; color:var(--text-dim);">${m.lastDepositAt || '-'}</td>
         <td style="padding:8px 10px; text-align:center; font-size:11px; color:var(--text-dim);">${m.registeredAt || '-'}</td>
@@ -3709,7 +3837,9 @@ if (btnExportLatestMonthExcel) {
     const pad2 = (n) => String(n).padStart(2, '0');
     const now = new Date();
     const dateStr = `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
-    const modeLabel = latestMonthFilterMode === 'both' ? 'ฝากทั้ง2เดือน' : (latestMonthFilterMode === 'prev' ? 'ฝากเดือนที่แล้ว' : 'ฝากล่าสุด');
+    const modeLabel = latestMonthFilterMode === 'both'
+      ? 'ฝากทั้ง2เดือน'
+      : (latestMonthFilterMode === 'cur' ? 'ฝากเดือนนี้' : 'ฝากเดือนที่แล้ว');
     const defaultFilename = `NK_รายงานลูกค้าฝากล่าสุด_${modeLabel}_${dateStr}.xlsx`;
 
     const savePath = await window.nkAPI.selectSavePath(defaultFilename);

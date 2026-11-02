@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NK BackOffice Helper v3.8.37</title>
+  <title>NK BackOffice Helper v3.8.38</title>
   <link rel="stylesheet" href="styles/main.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
     <div class="titlebar-brand">
       <span class="brand-badge">NK</span>
       <span class="titlebar-title">BackOffice Helper Desktop</span>
-      <span class="version-tag" id="appVersionTag">v3.8.37</span>
+      <span class="version-tag" id="appVersionTag">v3.8.38</span>
     </div>
     <div class="titlebar-actions">
       <div id="remoteControlPill" class="session-status" style="display:inline-flex; align-items:center; gap:6px; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); color:#10b981; padding:3px 10px; border-radius:20px; font-size:11.5px; font-weight:600;" title="สถานะเชื่อมต่อศูนย์ควบคุมออนไลน์ Railway">
@@ -1317,15 +1317,30 @@
             <!-- Action & Filter Bar -->
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
               <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                <!-- Filter Mode Selection -->
+                <!-- Filter Mode 3 Options: 1. ฝากเดือนนี้, 2. ฝากเดือนที่แล้ว, 3. ฝากเดือนนี้+เดือนที่แล้ว -->
                 <div style="display:flex; align-items:center; gap:6px;">
-                  <label for="selLatestDepositFilterMode" style="font-size:12px; color:var(--text-muted); font-weight:600;">เงื่อนไขการกรอง:</label>
-                  <select id="selLatestDepositFilterMode" class="daily-select" style="min-width:240px; height:42px; font-weight:600; font-size:12.5px; border-color:rgba(16,185,129,0.4);">
-                    <option value="both" selected>🌟 ฝากทั้ง 2 เดือน (เดือนที่แล้ว + เดือนนี้)</option>
-                    <option value="prev">📌 ฝากล่าสุดเดือนที่แล้ว (มียอดฝากในเดือนที่แล้ว)</option>
-                    <option value="prev_only">⏳ ฝากเดือนที่แล้วเท่านั้น (เดือนนี้ยังไม่ฝาก)</option>
-                    <option value="all">🌐 แสดงทุกคนที่ฝากล่าสุด (เดือนใดเดือนหนึ่ง หรือ 2 เดือน)</option>
+                  <label for="selLatestDepositFilterMode" style="font-size:12px; color:var(--text-muted); font-weight:700;">กรองยอดฝาก:</label>
+                  <select id="selLatestDepositFilterMode" class="daily-select" style="min-width:260px; height:42px; font-weight:700; font-size:12.5px; border-color:rgba(16,185,129,0.5);">
+                    <option value="both" selected id="optFilterBoth">🌟 3. ฝากเดือนนี้ + เดือนที่แล้ว</option>
+                    <option value="cur" id="optFilterCur">📅 1. ฝากเดือนนี้</option>
+                    <option value="prev" id="optFilterPrev">⏪ 2. ฝากเดือนที่แล้ว</option>
                   </select>
+                </div>
+
+                <!-- 3 Quick Mode Toggle Buttons for 1-Click Fast Switching -->
+                <div class="latest-mode-toggle-group" style="display:inline-flex; gap:4px; background:rgba(0,0,0,0.3); padding:3px; border-radius:8px; border:1px solid var(--border-subtle);">
+                  <button type="button" class="btn-mode-toggle active" data-latest-mode="both" id="btnModeBoth" title="ดึงเฉพาะคนที่มียอดฝากทั้ง 2 เดือน (เดือนนี้มี เดือนก่อนไม่มี จะไม่เอา)">
+                    <span>🌟 3. ฝากเดือนนี้ + เดือนที่แล้ว</span>
+                    <small id="sublabelModeBoth" style="font-size:11px; opacity:0.85; font-weight:normal;"></small>
+                  </button>
+                  <button type="button" class="btn-mode-toggle" data-latest-mode="cur" id="btnModeCur" title="ดึงคนที่มียอดฝากในเดือนนี้">
+                    <span>📅 1. ฝากเดือนนี้</span>
+                    <small id="sublabelModeCur" style="font-size:11px; opacity:0.85; font-weight:normal;"></small>
+                  </button>
+                  <button type="button" class="btn-mode-toggle" data-latest-mode="prev" id="btnModePrev" title="ดึงคนที่มียอดฝากในเดือนที่แล้ว">
+                    <span>⏪ 2. ฝากเดือนที่แล้ว</span>
+                    <small id="sublabelModePrev" style="font-size:11px; opacity:0.85; font-weight:normal;"></small>
+                  </button>
                 </div>
 
                 <!-- Month Reference Selection -->
@@ -1794,7 +1809,7 @@
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
               <div>
                 <h3 style="font-size:15px; margin-bottom:4px;">🚀 เวอร์ชันโปรแกรม (NK Helper Desktop)</h3>
-                <span style="font-size:12.5px; color:var(--accent); font-weight:700;">เวอร์ชันปัจจุบัน: v3.8.37</span>
+                <span style="font-size:12.5px; color:var(--accent); font-weight:700;">เวอร์ชันปัจจุบัน: v3.8.38</span>
                 <p style="font-size:11px; color:var(--text-muted); margin-top:2px;">รองรับเมนูเว็บ Agent (ag.ismgaming6.com), แก้ไขช่องกรอก วันที่/เวลา แบบฟอร์ม, บันทึกฟอร์มปลอดภัย Offline First</p>
               </div>
               <div style="display:flex; gap:8px; flex-wrap:wrap;">
